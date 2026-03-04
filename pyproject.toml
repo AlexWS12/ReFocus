@@ -8,6 +8,7 @@ dependencies = [
     "mediapipe>=0.10.32",
     "opencv-python>=4.13.0.92",
     "pyside6>=6.10.2",
+    "ultralytics>=8.3", #YOLO V11
 ]
 
 [tool.uv]
