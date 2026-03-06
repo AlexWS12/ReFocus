@@ -31,8 +31,8 @@ class Database:
 
         # Create a SESSIONS table to store user session data
         # id                      - unique identifier for each session
-        # start_time              - time the session started (ISO 8601)
-        # end_time                - time the session ended (ISO 8601); NULL while active
+        # start_time              - time the session started (ISO 8601) --- we will discuss further into this next week
+        # end_time                - time the session ended (ISO 8601); NULL while active  --- we will discuss further into this next week
         # duration                - total duration of the session in seconds
         # focused_time            - time spent focused (not distracted) in seconds
         # events                  - total number of distraction events
@@ -144,9 +144,8 @@ class Database:
             )
         ''')
 
-
-    def close(self):
-        """Close the database connection."""
+# Close the database connection when done
+    def close(self): 
         if self.conn:
             self.conn.close()
             self.conn = None
