@@ -28,6 +28,12 @@
 - [ ] Note any limitations (lighting, distance, angles, glasses, etc.)
 - [ ] Share findings in the team thread
 
+## Stretch Goals (Maybe for next week)
+- [ ] Detect if the user is looking at the screen vs looking away (gaze estimation)
+- [ ] Track blink detection using the eye aspect ratio (distance between upper/lower eyelid landmarks)
+- [ ] Explore: could we use iris tracking to determine how long someone has been focused?
+- [ ] Try combining iris tracking with the camera feed from `camera.py`
+
 ## Notes
 _Use this space to jot down observations:_
 

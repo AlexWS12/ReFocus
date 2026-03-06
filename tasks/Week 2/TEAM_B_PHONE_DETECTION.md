@@ -8,8 +8,6 @@
 
 ---
 
-## Paul — Camera + Live Phone Detection
-
 ### Combine Camera with YOLO
 - [ ] Merge `camera.py` and `phone_detector.py` into a working live phone detector
 - [ ] Add `classes=[67]` to filter detections for cell phones only
@@ -29,23 +27,14 @@
 
 ---
 
-## Josue — Open Images Dataset Research
-
 ### Understand the Baseline
-- [ ] Test the pretrained COCO model on phone detection and document accuracy
-- [ ] Count how many phone images are in the COCO dataset
-- [ ] Identify limitations of COCO for phone detection (angles, phone types, distances)
+- [ ] Test the pretrained COCO model on phone detection and note how well it works
+- [ ] Try different phone angles, distances, and lighting — note where it struggles
 
-### Research Open Images
-- [ ] Look up the Open Images dataset — how many "Mobile Phone" images does it have?
-- [ ] Understand the annotation format Open Images uses vs what YOLO expects
-- [ ] Research how to convert Open Images annotations to YOLO format
-- [ ] Find or draft a custom data YAML file for training YOLO on Open Images phone data
-
-### Plan the Dataset Switch
-- [ ] Document the steps needed to download just the phone subset of Open Images
-- [ ] Estimate the dataset size and training time with the nano model
-- [ ] Outline a plan for how we would fine-tune YOLO with the new dataset
+### Improve the Dataset (Stretch Goal/ maybe for next week)
+- [ ] Pick 50-100 photos of modern phones (different angles, lighting, distances)
+- [ ] Label them using Roboflow or CVAT (both export to YOLO format)
+- [ ] Fine-tune the pretrained model on your custom images and compare results
 - [ ] Share findings in the team thread
 
 ---
