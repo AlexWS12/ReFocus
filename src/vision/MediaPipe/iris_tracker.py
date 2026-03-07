@@ -1,46 +1,26 @@
 import cv2 as cv
-import mediapipe as mp
 
-mp_face_mesh = mp.solutions.face_mesh
-mp_drawing = mp.solutions.drawing_utils
-mp_drawing_styles = mp.solutions.drawing_styles
+class eyeTracker:
+    def __init__(self):
+        self.face_cascade = cv.CascadeClassifier(
+            cv.data.haarcascades + "haarcascade_frontalface_default.xml"
+        )
+        self.eye_cascade = cv.CascadeClassifier(
+            cv.data.haarcascades + "haarcascade_eye.xml"
+        )
 
-cap = cv.VideoCapture(0)
+    def track_eyes(self, frame):
+        gray = cv.cvtColor(frame, cv.COLOR_BGR2GRAY)
+        faces = self.face_cascade.detectMultiScale(gray, 1.3, 6)
 
-with mp_face_mesh.FaceMesh(
-    max_num_faces=1,
-    refine_landmarks=True,  # Enables iris landmarks (468-477)
-    min_detection_confidence=0.5,  # Play with this (0.0 - 1.0)
-    min_tracking_confidence=0.5,   # Play with this (0.0 - 1.0)
-) as face_mesh:
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
+        for (x, y, w, h) in faces:
+            cv.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+            roi_gray = gray[y : y + h//2, x : x + w]
+            roi_color = frame[y : y + h//2, x : x + w]
 
-        # MediaPipe expects RGB
-        rgb = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
-        results = face_mesh.process(rgb)
+            eyes = self.eye_cascade.detectMultiScale(roi_gray, 1.1, 8)
+            for (ex, ey, ew, eh) in eyes:
+                cv.rectangle(roi_color, (ex, ey), (ex + ew, ey + eh), (0, 255, 0), 2)
 
-        if results.multi_face_landmarks:
-            for face_landmarks in results.multi_face_landmarks:
-                # Draw all face mesh landmarks
-                mp_drawing.draw_landmarks(
-                    frame, face_landmarks,
-                    mp_face_mesh.FACEMESH_IRISES,
-                    landmark_drawing_spec=None,
-                    connection_drawing_spec=mp_drawing_styles.get_default_face_mesh_iris_connections_style(),
-                )
-
-                # Print iris landmark coordinates to understand them
-                left_iris = face_landmarks.landmark[468]   # Left iris center
-                right_iris = face_landmarks.landmark[473]  # Right iris center
-                print(f"Left iris: ({left_iris.x:.3f}, {left_iris.y:.3f})")
-                print(f"Right iris: ({right_iris.x:.3f}, {right_iris.y:.3f})")
-
-        cv.imshow("Iris Tracking", frame)
-        if cv.waitKey(1) == ord("q"):
-            break
-
-cap.release()
-cv.destroyAllWindows()
+        # cv.imshow("Eye Tracker", frame)  # Optional: remove for modular use
+        return frame

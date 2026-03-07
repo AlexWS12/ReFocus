@@ -1,25 +1,41 @@
-# This module should provide a Camera class with read_frame() and release() methods.
+# camera.py
 from ultralytics import YOLO
 import cv2 as cv
+from MediaPipe.iris_tracker import eyeTracker
 
-model = YOLO("yolo26n.pt")
+class Camera:
+    def __init__(self, model_path="yolo26n.pt"):
+        self.model = YOLO(model_path)
+        self.cap = cv.VideoCapture(0)
+        self.eye_tracker = eyeTracker()
 
-cap = cv.VideoCapture(0)
-while cap.isOpened():
-    ret, frame = cap.read()
-    if not ret:
-        break
+    def read_frame(self):
+        ret, frame = self.cap.read()
+        if not ret:
+            return None
 
-    # Detect phones only (COCO class 67)
-    results = model(frame, classes=[67], conf=0.1)  # Adjust confidence threshold as needed
+        results = self.model(frame, classes=[67])  # phones only
+        annotated = results[0].plot()
 
-    # Draw bounding boxes on the frame
-    annotated = results[0].plot()
+        # Run eye tracking on the annotated frame
+        annotated = self.eye_tracker.track_eyes(annotated)
 
-    cv.imshow("Phone Detection", annotated)
-    if cv.waitKey(1) == ord("q"):
-        break
+        return frame, annotated
+
+    def release(self):
+        self.cap.release()
+        cv.destroyAllWindows()
 
 
-cap.release()
-cv.destroyAllWindows()
+# This loop only runs if you click “Run” on camera.py
+if __name__ == "__main__":
+    cam = Camera()
+    while True:
+        data = cam.read_frame()
+        if data is None:
+            break
+        _, annotated = data
+        cv.imshow("Phone Detection", annotated)
+        if cv.waitKey(1) == ord("q"):
+            break
+    cam.release()
