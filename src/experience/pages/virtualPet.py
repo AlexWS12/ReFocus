@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
-from src.experience.pages.petWindow import petWindow
+
+from src.experience.petWindow import petWindow
 
 
 class virtualPet(QWidget):
