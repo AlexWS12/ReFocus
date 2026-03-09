@@ -13,6 +13,7 @@ class Database:
         if self.conn is None:
             self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
             self.conn.row_factory = sqlite3.Row # Converts query results from tuples to dictionary objects
+            self.conn.execute("PRAGMA foreign_keys = ON")  # SQLite disables FK enforcement by default
         return self.conn
 
 
@@ -105,6 +106,8 @@ class Database:
                 updated_at TEXT
             )
         ''')
+        # Seed the singleton row so reads always find a record
+        cursor.execute("INSERT OR IGNORE INTO user_stats (id) VALUES (1)")
 
 
     def _create_events_table(self):
