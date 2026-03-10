@@ -26,7 +26,7 @@ class Camera:
             return None
 
         # Detect phones only (class 67 in COCO dataset)
-        results = self.model(frame, classes=[67])
+        results = self.model(frame, classes=[67], conf = 0.5, iou = 0.5, imgsz = 640)
         annotated = results[0].plot()  # Draw bounding boxes on frame
 
         # Run eye tracking on the annotated frame
