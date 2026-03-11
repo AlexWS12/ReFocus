@@ -44,8 +44,22 @@ class Camera:
         results = self.model(frame, classes=[67], conf=self.detection_params.get("conf", 0.35), iou=0.3, imgsz=640)  # Adjust confidence, IoU, and image size as needed
         annotated = results[0].plot()  # Draw bounding boxes on frame
 
-        # Run eye tracking on the annotated frame
+        # Track eyes (landmarks stored internally)
         annotated = self.eye_tracker.track_eyes(annotated)
+
+        # Extract eye data from internal landmarks
+        eye_data = self.eye_tracker.extract_eye_data(self.eye_tracker.landmarks, annotated)
+
+        # Display gaze on screen
+        gaze_text = f"H: {eye_data['gaze_state_horizontal']}, V: {eye_data['gaze_state_vertical']}"
+        cv.putText(
+            annotated, gaze_text,
+            (10, 30),
+            cv.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (0, 0, 255),
+            2
+        )
 
         return frame, annotated
 
