@@ -10,7 +10,7 @@ Just `pip install mediapipe` (already in our dependencies via `uv sync`).
 ## Phase 1: MediaPipe Setup & Basic Integration
 
 ### Install & Verify
-- [ ] Confirm `mediapipe` is installed (`uv sync` should handle it)
+- [x] Confirm `mediapipe` is installed (`uv sync` should handle it)
 - [ ] Create a test script that initializes `mp.solutions.face_mesh` with `refine_landmarks=True`
 - [ ] Run it on a webcam frame and confirm you get 478 landmarks (468 face + 10 iris)
 - [ ] Print landmark count to verify iris landmarks (indices 468–477) are present

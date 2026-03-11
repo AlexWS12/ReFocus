@@ -10,13 +10,13 @@ This week I'm handling project management, code reviews, and the integration lay
 ### Code Reviews
 - [ ] Review Team A's MediaPipe migration PR — verify iris landmarks are correct
 - [ ] Review Team A's structured data output — confirm format matches agreed spec
-- [ ] Review Team B's parameter experimentation — validate their recommended values
+- [ ] Review Team B's calibration flow, detection heuristics, and parameter experimentation — validate their recommended values
 - [ ] Review Team B's structured detection output — confirm format matches spec
 
 ### Team Support
 - [ ] Ensure `mediapipe` is added to `pyproject.toml` dependencies
 - [ ] Answer questions from Team A on MediaPipe landmark indices
-- [ ] Answer questions from Team B on YOLO parameter tuning
+- [ ] Answer questions from Team B on YOLO parameter tuning, calibration thresholds, and weak-detection filtering
 - [ ] Run both teams' code together and flag any integration issues early
 
 ### Planning & Communication
@@ -36,7 +36,7 @@ This week I'm handling project management, code reviews, and the integration lay
 - [ ] Verify all imports work after folder renames (`Trackers.iris_tracker`)
 
 ### Dependency Management
-- [ ] Ensure `pyproject.toml` has `mediapipe` listed
+- [x] Ensure `pyproject.toml` has `mediapipe` listed
 - [ ] Run `uv sync` and confirm clean install
 - [ ] Document any version constraints (e.g., mediapipe + Python version compatibility)
 
@@ -63,13 +63,11 @@ This week I'm handling project management, code reviews, and the integration lay
   }
   ```
 - [ ] Create `vision_pipeline.py` that orchestrates camera → tracking → detection → output
+- [ ] Decide where calibration state/result lives in the pipeline so the app can reuse it across runs
+- [ ] Decide how saved calibration settings and runtime detection heuristics are surfaced in the pipeline output
 - [ ] Ensure the pipeline runs at acceptable FPS (target: 15+ FPS)
 
-### Connect Vision to App
-- [ ] Define how vision signals reach the UI (`src/experience/mainWindow.py`)
-- [ ] Define how vision signals reach the database (`src/intelligence/database.py`)
-- [ ] Consider: use Qt signals, callbacks, or an event bus?
-- [ ] Prototype the connection — even if just logging events to console for now
+
 
 ### Event System Design
 - [ ] Design event types: `PHONE_DETECTED`, `ATTENTION_LOST`, `ATTENTION_REGAINED`, `SESSION_DISTRACTION`
@@ -83,6 +81,8 @@ This week I'm handling project management, code reviews, and the integration lay
 
 ### Test Full Pipeline
 - [ ] Run `camera.py` with both teams' latest code integrated
+- [ ] Run the new calibration flow from both `camera.py` and `test_calibration_gui.py`
+- [ ] Verify saved calibration settings are reused correctly on relaunch
 - [ ] Test scenario: studying normally → pick up phone → put phone down → look away → look back
 - [ ] Verify that the right events/states are produced for each scenario
 - [ ] Profile FPS — identify any bottlenecks
@@ -118,4 +118,5 @@ This week I'm handling project management, code reviews, and the integration lay
 ### Key Decisions to Make
 - Event system architecture (Qt signals vs callbacks vs event bus)
 - Database format (SQLite vs JSON)
+- How calibration settings are persisted and reloaded per user
 - How tightly to couple vision → UI (direct calls vs event-driven)

@@ -1,7 +1,7 @@
 # Vision Team — Week 4 Summary
 
 ## Overview
-Full week sprint. Team A migrates from Haar cascades to MediaPipe (no training required). Team B tunes YOLO parameters and documents detection limits. Team Lead handles integration, management, and codebase cleanup.
+Full week sprint. Team A migrates from Haar cascades to MediaPipe (no training required). Team B focuses on improving base-model phone detection through calibration, parameter tuning, and runtime heuristics rather than custom training. Team Lead handles integration, management, and codebase cleanup.
 
 ---
 
@@ -20,13 +20,14 @@ Full week sprint. Team A migrates from Haar cascades to MediaPipe (no training r
 ---
 
 ## Team B — YOLO Optimization (Paul & Josue)
-**Goal:** Find optimal detection parameters and document where phone detection breaks down.
+**Goal:** Build on the new calibration flow by improving detection reliability, documenting failure cases, and wiring phone detection into structured app-ready outputs without introducing manual model training yet.
 
 **Key Deliverables:**
-1. Test `conf` (0.25, 0.5, 0.75), `iou` (0.3, 0.5, 0.7), `imgsz` (320, 640, 1280)
+1. Validate and document the new calibration-derived confidence behavior alongside `iou` (0.3, 0.5, 0.7) and `imgsz` (320, 640, 1280)
 2. Document detection limits (distance, angle, lighting, similar objects)
-3. Return structured detection data (phone_detected, confidence, bbox)
+3. Return structured detection data (phone_detected, confidence, bbox, area_ratio)
 4. Implement detection events (PHONE_APPEARED, PHONE_GONE) with cooldown
+5. Persist and reuse per-user calibration settings, and add practical heuristics to reduce weak detections
 
 ---
 
@@ -45,9 +46,9 @@ Full week sprint. Team A migrates from Haar cascades to MediaPipe (no training r
 
 ## Week 4 Priorities (ranked)
 1. **Team A:** Get MediaPipe running and returning iris landmarks
-2. **Team B:** Document optimal YOLO parameters
+2. **Team B:** Validate the new calibration flow and document optimal YOLO parameters
 3. **Lead:** Codebase cleanup and dependency management
 4. **Team A:** Structured attention data output
-5. **Team B:** Structured detection data output
-6. **Lead:** Integration layer connecting vision to app
+5. **Team B:** Structured detection data output and saved calibration settings
+6. **Lead:** Integration layer connecting calibration + vision to app
 7. **All:** Event system design for vision → UI communication

@@ -1,7 +1,7 @@
 # Team B — YOLO Optimization & Detection Events (Paul & Josue)
 
 ## Context
-Phone detection is working with `yolo26n.pt` and `classes=[67]`. This week we focus on **tuning for accuracy**, **documenting limits**, and **outputting structured detection data** so the rest of the app can react to phone presence.
+Phone detection is working with `yolo26n.pt` and `classes=[67]`. The latest push also added an **interactive calibration flow** that guides the user to place the phone in a box, rotate it, and derive a better confidence threshold before live detection starts. This week the priority is to **improve detection reliability without new model training**: validate defaults, harden calibration, document detection limits, and output structured detection data the rest of the app can use.
 
 ---
 
@@ -28,7 +28,7 @@ Phone detection is working with `yolo26n.pt` and `classes=[67]`. This week we fo
 
 ### Recommended Values
 - [ ] Write up the recommended combination of `conf`, `iou`, and `imgsz` for our use case
-- [ ] Update `camera.py` with the optimal parameter values
+- [ ] Validate the current baseline in `camera.py` (`conf` from calibration/default `0.35`, `iou=0.3`, `imgsz=640`) and update if experiments show better values
 
 ---
 
@@ -88,50 +88,45 @@ Phone detection is working with `yolo26n.pt` and `classes=[67]`. This week we fo
 
 ---
 
-## Phase 4: Per-User Phone Fine-Tuning
+## Phase 4: Calibration Hardening & Detection Robustness
 
-**Why:** Everyone's phone case is different. The generic COCO model detects "cell phone" but may struggle with unusual cases, colors, or orientations. Fine-tuning on each user's actual phone will improve accuracy significantly.
+**Why:** Everyone's phone case is different. Before spending time on datasets or custom training, we should push the base model and calibration flow as far as they can go. Better thresholds, better sampling, and clearer calibration UX may solve most of the real-world misses without adding training complexity.
 
 ### Data Collection Pipeline
-- [ ] Design a calibration flow: when a new user sets up the app, prompt them to show their phone to the camera
-- [ ] Record a short video (~5 seconds) while the user slowly rotates their phone in front of the webcam
-- [ ] Auto-extract ~20–30 frames from the video at regular intervals (skip near-duplicates)
-- [ ] Save extracted frames to a per-user directory (e.g., `data/users/{user_id}/phone_images/`)
-- [ ] The user only needs to do one quick video — the app handles the rest
+- [x] Build an interactive calibration flow that prompts the user to place their phone in a guide box and rotate it for sampling
+- [x] Add a calibration test GUI so the flow can be run without launching the full app
+- [x] Hook calibration into `Camera` so live detection can use calibrated parameters
+- [x] Analyze collected detections to derive a recommended confidence threshold and lighting quality result
+- [x] Add a validation step so the user can accept, retry, or cancel calibration results
+- [ ] Persist calibration results per user instead of keeping them in memory for the current run only
+- [ ] Save calibration metadata per user (threshold, lighting quality, sample count, timestamp)
+- [ ] Reuse saved calibration settings automatically on the next launch
+- [ ] Add a clear re-calibrate option if detection quality drops or the user changes phone/case
+- [ ] Integrate calibration into a real first-run / re-calibration user flow in the app
 
-### Auto-Labeling with Base Model
-- [ ] Use the existing `yolo26n.pt` model to auto-label captured frames (it already knows "phone")
-- [ ] Export auto-labels in YOLO format (class + bounding box coordinates)
-- [ ] Review: manually spot-check labels — fix any that the base model got wrong
-- [ ] Save labels alongside images in YOLO dataset structure:
-  ```
-  data/users/{user_id}/
-  ├── images/
-  │   ├── train/
-  │   └── val/
-  └── labels/
-      ├── train/
-      └── val/
-  ```
+### Calibration Improvements
+- [ ] Test whether multiple calibration passes improve results more than a single pass
+- [ ] Compare short vs longer calibration sessions (for example 10 vs 20+ samples)
+- [ ] Add prompts for additional poses that matter in real use: face-up, face-down, angled, partially occluded
+- [ ] Decide whether calibration should adapt `iou` or `imgsz` in addition to `conf`
+- [ ] Log which calibration phase produced weak detections so failures are easier to debug
 
-### Fine-Tuning
-- [ ] Create a YOLO dataset YAML config for the user's phone data
-- [ ] Fine-tune from `yolo26n.pt` (transfer learning — NOT training from scratch)
-- [ ] Use small epoch count (10–20) since we're just adapting, not retraining
-- [ ] Save the fine-tuned model as `data/users/{user_id}/phone_model.pt`
-- [ ] Test: compare detection accuracy between base model and fine-tuned model on user's phone
-- [ ] Document the fine-tuning command and parameters
+### Detection Quality Improvements
+- [ ] Add optional image preprocessing experiments for hard cases (brightness normalization, contrast boost, resize strategy)
+- [ ] Compare raw detection vs calibrated detection on the same test scenarios and document the improvement
+- [ ] Add heuristics for rejecting obviously bad detections (tiny boxes, implausible aspect ratios, unstable one-frame boxes)
+- [ ] Decide whether area ratio or position in frame should affect whether a detection is treated as real
+- [ ] Identify the top 3 failure cases that remain after calibration and document practical mitigations
 
 ### Integration
-- [ ] Update `Camera` class to load per-user model if available, fall back to base model
-- [ ] Design the flow: first launch → calibration → fine-tune → switch to custom model
-- [ ] Consider: re-calibrate option if user changes phone case
+- [x] Update `Camera` class to run calibration and apply calibrated detection parameters before live detection
+- [ ] Update `Camera` class to load saved per-user calibration settings if available, fall back to defaults
+- [ ] Design the full flow: first launch → calibration → save settings → live detection → re-calibrate if needed
+- [ ] Decide when the app should prompt for re-calibration (manual only, or after repeated low-confidence detections)
 
-### Labeling Tool Options (if manual labeling needed)
-- [ ] Try [Roboflow](https://roboflow.com/) — free tier, browser-based, exports YOLO format
-- [ ] Try [CVAT](https://www.cvat.ai/) — open source, self-hosted option
-- [ ] Try [Label Studio](https://labelstud.io/) — open source, Python-based
-- [ ] Pick one and document the workflow for the team
+### Training Deferred For Now
+- [ ] Only revisit dataset collection and fine-tuning if calibrated detection is still unreliable on real user phones
+- [ ] If that happens later, document the exact failure threshold that justifies training (for example: repeated misses after calibration across multiple orientations)
 
 ---
 
@@ -140,17 +135,18 @@ Phone detection is working with `yolo26n.pt` and `classes=[67]`. This week we fo
 - [ ] Explore: can we detect if the user is *holding* the phone vs phone just sitting on the desk?
 - [ ] Consider: should we track other distracting objects? (e.g., game controllers, food)
 - [ ] Explore: can we distinguish between "checking phone briefly" vs "scrolling for minutes"?
+- [ ] Revisit per-user fine-tuning later only if calibration + heuristics are not good enough
 
 ---
 
 ## Notes
 
 ### Files to Modify
-- `src/vision/camera.py` — update YOLO parameters, add structured output, per-user model loading
+- `src/vision/camera.py` — validate YOLO params, add structured output, and load saved calibration settings
+- `src/vision/phone_calibration.py` — extend calibration, persistence, and detection-quality analysis
+- `src/vision/test_calibration_gui.py` — keep calibration UX testable while the flow evolves
 - May create a new `phone_events.py` if event logic gets complex
-- May create `calibration.py` for the phone capture/fine-tune pipeline
 
 ### Resources
 - [Ultralytics YOLO Predict Docs](https://docs.ultralytics.com/modes/predict/) — conf, iou, imgsz params
-- [Ultralytics Fine-Tuning Guide](https://docs.ultralytics.com/modes/train/) — transfer learning setup
 - COCO class 67 = cell phone
