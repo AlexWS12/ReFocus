@@ -105,7 +105,7 @@ class SessionManager:
 
         # Derived session-level stats computed from the aggregated distraction_data
         distraction_time = sum(d["time"] for d in distraction_data.values())
-        focused_time     = duration - distraction_time
+        focused_time     = max(0, duration - distraction_time)
         total_events     = sum(d["count"] for d in distraction_data.values())
         focus_percentage = round((focused_time / duration) * 100, 1) if duration > 0 else 0
 
@@ -183,7 +183,7 @@ class SessionManager:
             duration_bonus = 0
 
         score = 100 - penalty + duration_bonus
-        return max(0, min(100, round(score, 1)))
+        return max(0, min(100, round(score)))
 
     def session_report(self):
         if self.session_state != SessionState.ENDED:
@@ -195,25 +195,31 @@ class SessionManager:
         ''', (self.current_session_id,))
         session_data = cursor.fetchone()
 
+        # Guard against the row not being found (e.g. DB was wiped mid-session)
+        if session_data is None:
+            raise Exception(f"Session record not found for id={self.current_session_id}.")
+
+        # Access columns by name (sqlite3.Row supports this) so the report
+        # doesn't silently break if the schema column order ever changes.
         report = {
-            "session_id": session_data[0],
-            "start_time": session_data[1],
-            "end_time": session_data[2],
-            "duration": session_data[3],
-            "focused_time": session_data[4],
-            "events": session_data[5],
-            "time_away": session_data[6],
-            "look_away_time": session_data[7],
-            "distraction_time": session_data[8],
-            "phone_distractions": session_data[9],
-            "look_away_distractions": session_data[10],
-            "left_desk_distractions": session_data[11],
-            "app_distractions": session_data[12],
-            "idle_distractions": session_data[13],
-            "focus_percentage": session_data[14],
-            "score": session_data[15],
-            "points_earned": session_data[16],
-            "coins_earned": session_data[17]
+            "session_id":             session_data["id"],
+            "start_time":             session_data["start_time"],
+            "end_time":               session_data["end_time"],
+            "duration":               session_data["duration"],
+            "focused_time":           session_data["focused_time"],
+            "events":                 session_data["events"],
+            "time_away":              session_data["time_away"],
+            "look_away_time":         session_data["look_away_time"],
+            "distraction_time":       session_data["distraction_time"],
+            "phone_distractions":     session_data["phone_distractions"],
+            "look_away_distractions": session_data["look_away_distractions"],
+            "left_desk_distractions": session_data["left_desk_distractions"],
+            "app_distractions":       session_data["app_distractions"],
+            "idle_distractions":      session_data["idle_distractions"],
+            "focus_percentage":       session_data["focus_percentage"],
+            "score":                  session_data["score"],
+            "points_earned":          session_data["points_earned"],
+            "coins_earned":           session_data["coins_earned"],
         }
 
         return report
