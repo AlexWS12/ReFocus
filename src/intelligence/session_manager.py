@@ -85,16 +85,50 @@ class SessionManager:
 
         score = self.calculate_score(duration, distraction_data)
 
-        # Write end time, duration, and computed score back to the session row.
-        # Other columns (focused_time, distraction breakdowns, etc.) will be
-        # populated here once those tracking systems are in place.
+        # Helper to safely pull a field from distraction_data without KeyError.
+        # Returns 0 if the distraction type was never logged this session.
+        def get(dtype, field):
+            return distraction_data.get(dtype, {}).get(field, 0)
+
+        # Per-type counts — map directly to their DB columns
+        phone_count     = get(DistractionType.PHONE_DISTRACTION,     "count")
+        look_away_count = get(DistractionType.LOOK_AWAY_DISTRACTION, "count")
+        left_desk_count = get(DistractionType.LEFT_DESK_DISTRACTION, "count")
+        app_count       = get(DistractionType.APP_DISTRACTION,       "count")
+        idle_count      = get(DistractionType.IDLE_DISTRACTION,      "count")
+
+        # Per-type times for the time-based columns
+        # time_away      = left desk time (physically absent from desk)
+        # look_away_time = look away time (eyes off screen but still at desk)
+        time_away      = get(DistractionType.LEFT_DESK_DISTRACTION, "time")
+        look_away_time = get(DistractionType.LOOK_AWAY_DISTRACTION, "time")
+
+        # Derived session-level stats computed from the aggregated distraction_data
+        distraction_time = sum(d["time"] for d in distraction_data.values())
+        focused_time     = duration - distraction_time
+        total_events     = sum(d["count"] for d in distraction_data.values())
+        focus_percentage = round((focused_time / duration) * 100, 1) if duration > 0 else 0
+
+        # Write all populated columns back to the session row in one update.
+        # points_earned and coins_earned are left at their defaults (0) until
+        # the rewards system is implemented.
         cursor = self.db.cursor()
         cursor.execute('''
-            UPDATE sessions SET end_time=?, duration=?, score=? WHERE id=?
+            UPDATE sessions SET
+                end_time=?, duration=?, score=?,
+                focused_time=?, events=?, distraction_time=?,
+                time_away=?, look_away_time=?,
+                phone_distractions=?, look_away_distractions=?,
+                left_desk_distractions=?, app_distractions=?, idle_distractions=?,
+                focus_percentage=?
+            WHERE id=?
         ''', (
             time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(self.session_end_time)),
-            duration,
-            score,
+            duration, score,
+            focused_time, total_events, distraction_time,
+            time_away, look_away_time,
+            phone_count, look_away_count, left_desk_count, app_count, idle_count,
+            focus_percentage,
             self.current_session_id
         ))
         self.db.commit()
