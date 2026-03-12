@@ -43,6 +43,16 @@ class SessionManager:
         # Populated by log_distraction() and aggregated in end_session() before scoring.
         self.distraction_events = []
 
+    def reset(self):
+        # Resets all session state back to defaults, allowing the instance to be reused.
+        # Must be called after a session ends before starting a new one.
+        # Clears distraction_events so old data never bleeds into the next session.
+        self.current_session_id = None
+        self.session_state = SessionState.READY
+        self.session_start_time = None
+        self.session_end_time = None
+        self.distraction_events = []
+
     def start_session(self):
         if self.session_state != SessionState.READY:
             raise Exception("Session is already in progress or paused.")
@@ -133,8 +143,9 @@ class SessionManager:
         ))
         self.db.commit()
 
-        # self.current_session_id = None
         self.session_state = SessionState.ENDED
+        # Session data is intentionally kept in memory (current_session_id, distraction_events)
+        # until reset() is explicitly called, so session_report() can still be accessed after end.
 
     def calculate_score(self, duration, distraction_data=None):
         # Computes a 0–100 focus score for the session.
