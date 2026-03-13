@@ -3,6 +3,8 @@
 ## Context
 This week I'm handling project management, code reviews, and the integration layer that connects vision outputs to the rest of the app. Also responsible for codebase cleanup and making sure both teams have what they need.
 
+Completed work this week also included the calibration animation UX, simplifying the gaze detection flow after Team A's strong MediaPipe work, building a small menu for faster feature testing with Team B, and partnering with Team B on phone calibration optimization.
+
 ---
 
 ## Management
@@ -10,19 +12,19 @@ This week I'm handling project management, code reviews, and the integration lay
 ### Code Reviews
 - [ ] Review Team A's MediaPipe migration PR — verify iris landmarks are correct
 - [ ] Review Team A's structured data output — confirm format matches agreed spec
-- [ ] Review Team B's calibration flow, detection heuristics, and parameter experimentation — validate their recommended values
+- [x] Review Team B's calibration flow, detection heuristics, and parameter experimentation — validate their recommended values
 - [ ] Review Team B's structured detection output — confirm format matches spec
 
 ### Team Support
 - [ ] Ensure `mediapipe` is added to `pyproject.toml` dependencies
 - [ ] Answer questions from Team A on MediaPipe landmark indices
-- [ ] Answer questions from Team B on YOLO parameter tuning, calibration thresholds, and weak-detection filtering
-- [ ] Run both teams' code together and flag any integration issues early
+- [x] Answer questions from Team B on YOLO parameter tuning, calibration thresholds, and weak-detection filtering
+- [x] Run both teams' code together and flag any integration issues early
 
 ### Planning & Communication
 - [ ] Write Week 4 kickoff message in team thread — outline goals and deadlines
 - [ ] Mid-week check-in — are both teams on track? Any blockers?
-- [ ] End-of-week review — collect findings, write Week 4 summary
+- [x] End-of-week review — collect findings, write Week 4 summary
 - [ ] Start planning Week 5 priorities based on progress
 
 ---
@@ -81,11 +83,17 @@ This week I'm handling project management, code reviews, and the integration lay
 
 ### Test Full Pipeline
 - [ ] Run `camera.py` with both teams' latest code integrated
-- [ ] Run the new calibration flow from both `camera.py` and `test_calibration_gui.py`
+- [x] Run the new calibration flow from both `camera.py` and `test_calibration_gui.py`
 - [ ] Verify saved calibration settings are reused correctly on relaunch
 - [ ] Test scenario: studying normally → pick up phone → put phone down → look away → look back
 - [ ] Verify that the right events/states are produced for each scenario
 - [ ] Profile FPS — identify any bottlenecks
+
+### Integration Support Completed
+- [x] Improve calibration guidance animation and preview behavior so the phone-rotation prompt is easier to follow
+- [x] Simplify the gaze detection path after Team A's MediaPipe work so it is easier to validate during integration
+- [x] Build a small menu with Team B to make calibration and feature testing faster during development
+- [x] Work with Team B on phone calibration optimization, including UX and threshold tuning
 
 ### Database Schema
 - [ ] Design schema for storing study session data (attention states, distractions, timestamps)
