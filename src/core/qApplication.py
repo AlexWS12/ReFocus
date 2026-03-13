@@ -3,11 +3,15 @@ from PySide6.QtCore import QTimer
 
 from src.experience.mainWindow import MainWindow
 from src.experience.petWindow import petWindow
-
+from src.core.database_reader import DatabaseReader
 
 class QApplication(QApplication):
     def __init__(self):
         super().__init__()
+
+        # initialize stats reader
+        self.database_reader = DatabaseReader()
+
         self.main_window = MainWindow()
         self.main_window.show()
 
