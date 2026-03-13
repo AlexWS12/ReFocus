@@ -9,6 +9,8 @@ dependencies = [
     "numpy>=2.4.2",
     "opencv-python>=4.13.0.92",
     "pyside6>=6.10.2",
+    "questionary>=2.1.1",
+    "rich>=14.1.0",
     "ultralytics>=8.3", #YOLO V11
 ]
 

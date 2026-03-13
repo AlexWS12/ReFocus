@@ -3,7 +3,8 @@
 
 from ultralytics import YOLO
 import cv2 as cv
-from Trackers.iris_tracker import eyeTracker
+from Trackers.attention_tracker import gazeTracker
+from phone_calibration import PhoneCalibration
 
 
 class Camera:
@@ -13,8 +14,22 @@ class Camera:
         """Initialize camera, YOLO model, and eye tracker."""
         self.model = YOLO(model_path)  # Load YOLO model for object detection
         self.cap = cv.VideoCapture(0)  # Open default webcam (index 0)
-        self.eye_tracker = eyeTracker()
+        self.eye_tracker = gazeTracker()
+        self.detection_params = {"conf": 0.35}  # Default parameters
 
+    def calibrate(self) -> bool:
+        """Run interactive calibration before starting detection."""
+        calibrator = PhoneCalibration()
+        result = calibrator.run_calibration()  # Uses new multi-phase flow
+        
+        if result.get("success"):
+            self.detection_params = calibrator.get_optimal_params()
+            print(f"Using params: {self.detection_params}")
+            return True
+        else:
+            print(f"Calibration failed: {result.get('message')}")
+            return False
+        
     def read_frame(self):
         """Capture a frame, run phone detection and eye tracking.
         
@@ -26,11 +41,15 @@ class Camera:
             return None
 
         # Detect phones only (class 67 in COCO dataset)
-        results = self.model(frame, classes=[67])
+        results = self.model(frame, classes=[67], conf=self.detection_params.get("conf", 0.35), iou=0.3, imgsz=640)  # Adjust confidence, IoU, and image size as needed
         annotated = results[0].plot()  # Draw bounding boxes on frame
 
-        # Run eye tracking on the annotated frame
+        # Track eyes (landmarks stored internally)
         annotated = self.eye_tracker.track_eyes(annotated)
+
+        # Extract eye data from internal landmarks
+        eye_data = self.eye_tracker.extract_eye_data(self.eye_tracker.landmarks, annotated)
+
 
         return frame, annotated
 
@@ -40,9 +59,17 @@ class Camera:
         cv.destroyAllWindows()
 
 
-# This loop only runs if you click “Run” on camera.py
+# This loop only runs if you click "Run" on camera.py
 if __name__ == "__main__":
     cam = Camera()
+    
+    # Run calibration first
+    print("Starting calibration...")
+    if cam.calibrate():
+        print("Calibration successful! Starting detection...")
+    else:
+        print("Calibration failed. Using default parameters.")
+    
     while True:
         data = cam.read_frame()
         if data is None:
