@@ -3,6 +3,8 @@
 ## Overview
 Full week sprint. Team A migrates from Haar cascades to MediaPipe (no training required). Team B focuses on improving base-model phone detection through calibration, parameter tuning, and runtime heuristics rather than custom training. Team Lead handles integration, management, and codebase cleanup.
 
+Actual progress this week also included better calibration animation guidance, per-user few-shot phone learning, a simplified gaze-detection path built on Team A's strong work, a small test menu for faster iteration, and joint calibration optimization work between Team B and the team lead.
+
 ---
 
 ## Team A — MediaPipe Migration (Shah & Alex)
@@ -29,6 +31,11 @@ Full week sprint. Team A migrates from Haar cascades to MediaPipe (no training r
 4. Implement detection events (PHONE_APPEARED, PHONE_GONE) with cooldown
 5. Persist and reuse per-user calibration settings, and add practical heuristics to reduce weak detections
 
+**Week 4 progress highlights:**
+1. Improved phone-calibration guidance with animated rotation previews and clearer prompts
+2. Added few-shot appearance learning so calibration better matches each user's phone across multiple views
+3. Worked with the lead on calibration optimization and faster test loops through a small menu
+
 ---
 
 ## Team Lead — Integration & Management (Jorge)
@@ -41,6 +48,12 @@ Full week sprint. Team A migrates from Haar cascades to MediaPipe (no training r
 4. Prototype vision → app event system
 5. Database schema for study session data
 6. Mid-week and end-of-week check-ins
+
+**Week 4 progress highlights:**
+1. Improved the calibration animation/preview flow so the phone rotation steps are easier to follow
+2. Simplified the gaze detection path on top of Team A's strong MediaPipe implementation
+3. Built a small menu with Team B to test calibration and related features more quickly
+4. Partnered with Team B on phone calibration optimization and validation
 
 ---
 

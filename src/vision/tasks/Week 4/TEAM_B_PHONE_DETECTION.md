@@ -3,6 +3,8 @@
 ## Context
 Phone detection is working with `yolo26n.pt` and `classes=[67]`. The latest push also added an **interactive calibration flow** that guides the user to place the phone in a box, rotate it, and derive a better confidence threshold before live detection starts. This week the priority is to **improve detection reliability without new model training**: validate defaults, harden calibration, document detection limits, and output structured detection data the rest of the app can use.
 
+This week also included collaboration with the team lead on calibration UX, animated rotation guidance, test-menu shortcuts, and few-shot appearance learning to improve detection across user-specific phone views.
+
 ---
 
 ## Phase 1: Parameter Experimentation
@@ -107,9 +109,11 @@ Phone detection is working with `yolo26n.pt` and `classes=[67]`. The latest push
 ### Calibration Improvements
 - [ ] Test whether multiple calibration passes improve results more than a single pass
 - [ ] Compare short vs longer calibration sessions (for example 10 vs 20+ samples)
+- [x] Add clearer animated prompts for rotation guidance so calibration is easier to follow
+- [x] Add few-shot appearance learning during calibration to better match each user's phone
 - [ ] Add prompts for additional poses that matter in real use: face-up, face-down, angled, partially occluded
 - [ ] Decide whether calibration should adapt `iou` or `imgsz` in addition to `conf`
-- [ ] Log which calibration phase produced weak detections so failures are easier to debug
+- [x] Log which calibration phase produced weak detections so failures are easier to debug
 
 ### Detection Quality Improvements
 - [ ] Add optional image preprocessing experiments for hard cases (brightness normalization, contrast boost, resize strategy)
@@ -120,6 +124,7 @@ Phone detection is working with `yolo26n.pt` and `classes=[67]`. The latest push
 
 ### Integration
 - [x] Update `Camera` class to run calibration and apply calibrated detection parameters before live detection
+- [x] Build a small test menu with the team lead so calibration and phone-detection features can be exercised quickly
 - [ ] Update `Camera` class to load saved per-user calibration settings if available, fall back to defaults
 - [ ] Design the full flow: first launch → calibration → save settings → live detection → re-calibrate if needed
 - [ ] Decide when the app should prompt for re-calibration (manual only, or after repeated low-confidence detections)

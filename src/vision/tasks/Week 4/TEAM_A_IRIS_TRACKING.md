@@ -5,6 +5,8 @@ We're replacing the Haar cascade eye tracker with **MediaPipe Face Mesh + Iris**
 **No training is needed** — MediaPipe ships with pre-trained models that work out of the box.  
 Just `pip install mediapipe` (already in our dependencies via `uv sync`).
 
+Team A's MediaPipe work was strong enough that the integration pass this week could focus on simplifying the gaze-detection path and making it easier to validate alongside phone detection.
+
 ---
 
 ## Phase 1: MediaPipe Setup & Basic Integration
@@ -16,16 +18,16 @@ Just `pip install mediapipe` (already in our dependencies via `uv sync`).
 - [ ] Print landmark count to verify iris landmarks (indices 468–477) are present
 
 ### Understand the Landmarks
-- [ ] Read the [MediaPipe Face Mesh docs](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker) — focus on iris landmarks
+- [x] Read the [MediaPipe Face Mesh docs](https://ai.google.dev/edge/mediapipe/solutions/vision/face_landmarker) — focus on iris landmarks
 - [ ] Understand what `refine_landmarks=True` does (enables iris landmark indices 468–477)
 - [ ] Understand `min_detection_confidence` vs `min_tracking_confidence` — detection triggers on new faces, tracking maintains between frames
 - [ ] Map out iris indices: 468 = right iris center, 469–472 = right iris ring, 473 = left iris center, 474–477 = left iris ring
 
 ### Rewrite `iris_tracker.py`
-- [ ] Replace the Haar cascade code with MediaPipe Face Mesh
-- [ ] Initialize `FaceMesh(refine_landmarks=True, max_num_faces=1, min_detection_confidence=0.5, min_tracking_confidence=0.5)`
+- [x] Replace the Haar cascade code with MediaPipe Face Mesh
+- [x] Initialize `FaceMesh(refine_landmarks=True, max_num_faces=1, min_detection_confidence=0.5, min_tracking_confidence=0.5)`
 - [ ] Process frames with `face_mesh.process(rgb_frame)` — remember to convert BGR → RGB
-- [ ] Draw iris center points using `cv2.circle()` on the frame
+- [x] Draw iris center points using `cv2.circle()` on the frame
 - [ ] Draw face mesh outline (optional — use `mp.solutions.drawing_utils`)
 - [ ] Keep the same `track_eyes(frame)` method signature so `camera.py` doesn't break
 - [ ] Test with the webcam — confirm iris dots track smoothly
