@@ -4,7 +4,7 @@ from src.experience.button import Button
 from typing import TYPE_CHECKING # avoid circular imports
 
 if TYPE_CHECKING: 
-    from src.experience.mainWindow import MainWindow
+    from src.experience.main_window import MainWindow
 
 class Sidebar(QWidget):
     def __init__(self, main_window : MainWindow):

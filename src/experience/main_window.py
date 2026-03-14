@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QStackedWidget, QVBoxLayout
 from src.core.database_reader import DatabaseReader
-from src.experience.sideBar import Sidebar
+from src.experience.side_bar import Sidebar
 from src.experience.pages.dashboard import Dashboard
 from src.experience.pages.session import Session
 from src.experience.pages.report import Report
@@ -26,11 +26,12 @@ class MainWindow(QMainWindow):
         self.main_container.setLayout(self.layout)
         self.setCentralWidget(self.main_container)
 
+        # container for the top bar and pages
         self.topbar_pages_container = QWidget()
         self.topbar_pages_layout = QVBoxLayout()
         self.topbar_pages_container.setLayout(self.topbar_pages_layout)
 
-        # add sidebar and top bar pages container to layout
+        # add sidebar and top bar pages container to main layout
         self.sidebar = Sidebar(self)
         self.layout.addWidget(self.sidebar)
         self.layout.addWidget(self.topbar_pages_container)

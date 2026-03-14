@@ -1,13 +1,20 @@
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QTimer
 
-from src.experience.mainWindow import MainWindow
-from src.experience.petWindow import petWindow
+from src.experience.main_window import MainWindow
+from src.experience.pet_window import petWindow
 from src.core.database_reader import DatabaseReader
+
+from pathlib import Path
 
 class QApplication(QApplication):
     def __init__(self):
         super().__init__()
+
+        # Load global stylesheet
+        style_path = Path(__file__).resolve().parent.parent / "experience" / "style" / "theme.qss"
+        if style_path.exists():
+            self.setStyleSheet(style_path.read_text())
 
         # initialize stats reader
         self.database_reader = DatabaseReader()

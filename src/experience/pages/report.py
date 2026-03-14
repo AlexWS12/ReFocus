@@ -11,11 +11,18 @@ class Report(QWidget):
         super().__init__(parent)
 
         self.app = QApplication.instance()
+
+        # load report data
         self.data = self.app.database_reader.load_report_data()
+
+        # add total exp to the data
         self.data['total_exp'] = parent.data['exp']
 
+        # layout for the report
         self.layout = QGridLayout()
         self.setLayout(self.layout)
+
+        # add widgets to the grid layout
         self.layout.addWidget(LifetimeFocus(self), 0, 0)
         self.layout.addWidget(TotalSessions(self), 0, 1)
         self.layout.addWidget(LongestFocus(self), 1, 0)

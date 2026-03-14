@@ -37,6 +37,7 @@ class petWindow(QMainWindow):
         self.label.installEventFilter(self)
         self.label.setCursor(Qt.OpenHandCursor)
 
+    # Event filter for the pet window to make it draggable
     def eventFilter(self, obj, event):
         if obj == self.label:
             if event.type() == QEvent.MouseButtonPress:
@@ -61,6 +62,7 @@ class petWindow(QMainWindow):
                     return True
         return super().eventFilter(obj, event)
 
+    # End session and show the main window
     def _end_session(self):
         app = QApplication.instance()
         app.main_window.show()
