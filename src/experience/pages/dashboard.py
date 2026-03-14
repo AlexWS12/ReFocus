@@ -14,6 +14,8 @@ class Dashboard(QWidget):
         self.app = QApplication.instance()
         self.data = self.app.database_reader.load_dashboard_data()
 
+        print(self.data)
+
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
 

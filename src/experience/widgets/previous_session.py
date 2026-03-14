@@ -6,6 +6,8 @@ class PreviousSession(QWidget):
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
 
-        # self.layout.addWidget(QLabel(f"Score:{parent.data['previous_session_data']['score'] or 0}"))
-        # self.layout.addWidget(QLabel(f"Focused percentage: {parent.data['previous_session_data']['focus_percentage'] or 0}"))
-        # self.layout.addWidget(QLabel(f"Number of Sessions:{parent.data['previous_session_data']['events'] or 0}"))
+        self.prev = parent.data.get("previous_session_data") or {}
+
+        self.layout.addWidget(QLabel(f"Score:{self.prev.get("score") or 0}"))
+        self.layout.addWidget(QLabel(f"Focused percentage: {self.prev.get("focus_percentage") or 0}"))
+        self.layout.addWidget(QLabel(f"Number of Sessions:{self.prev.get("events") or 0}"))
