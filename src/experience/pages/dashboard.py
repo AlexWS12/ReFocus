@@ -17,8 +17,6 @@ class dashboard(QWidget):
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
 
-        self.layout.addWidget(QLabel("Dashboard"))
-
         self.grid_layout = QGridLayout()
         self.layout.addLayout(self.grid_layout)
 
