@@ -171,7 +171,7 @@ class SessionManager:
                 time_away=?, look_away_time=?,
                 phone_distractions=?, look_away_distractions=?,
                 left_desk_distractions=?, app_distractions=?, idle_distractions=?,
-                focus_percentage=?
+                focus_percentage=?, status=?, paused_duration=?
             WHERE id=?
         ''', (
             time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(self.session_end_time)),
@@ -179,7 +179,7 @@ class SessionManager:
             focused_time, total_events, distraction_time,
             time_away, look_away_time,
             phone_count, look_away_count, left_desk_count, app_count, idle_count,
-            focus_percentage,
+            focus_percentage, 'ended', self.total_paused_time,
             self.current_session_id
         ))
         self.db.commit()
@@ -292,6 +292,7 @@ class SessionManager:
             "score":                  session_data["score"],
             "points_earned":          session_data["points_earned"],
             "coins_earned":           session_data["coins_earned"],
+            "paused_duration":        session_data["paused_duration"],
         }
 
         return report
