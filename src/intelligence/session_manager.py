@@ -42,6 +42,10 @@ class SessionManager:
         # Each entry is {"type": DistractionType, "time": seconds}.
         # Populated by log_distraction() and aggregated in end_session() before scoring.
         self.distraction_events = []
+        # Tracks pause state: pause_start_time is set when the session is paused,
+        # total_paused_time accumulates all completed pause intervals in seconds.
+        self.pause_start_time = None
+        self.total_paused_time = 0
 
     def reset(self):
         # Resets all session state back to defaults, allowing the instance to be reused.
@@ -52,6 +56,8 @@ class SessionManager:
         self.session_start_time = None
         self.session_end_time = None
         self.distraction_events = []
+        self.pause_start_time = None
+        self.total_paused_time = 0
 
     def start_session(self):
         if self.session_state != SessionState.READY:
@@ -60,10 +66,38 @@ class SessionManager:
         self.session_start_time = time.time()
         cursor = self.db.cursor()
         cursor.execute('''
-            INSERT INTO sessions (start_time) VALUES (?)
-        ''', (time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(self.session_start_time)),))
+            INSERT INTO sessions (start_time, status) VALUES (?, ?)
+        ''', (time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(self.session_start_time)), 'in_progress'))
         self.db.commit()
         self.current_session_id = cursor.lastrowid
+        self.session_state = SessionState.IN_PROGRESS
+
+    def pause_session(self):
+        if self.session_state != SessionState.IN_PROGRESS:
+            raise Exception("Session must be in progress to pause.")
+
+        self.pause_start_time = time.time()
+        cursor = self.db.cursor()
+        cursor.execute('''
+            UPDATE sessions SET status = ? WHERE id = ?
+        ''', ('paused', self.current_session_id))
+        self.db.commit()
+        self.session_state = SessionState.PAUSED
+
+    def resume_session(self):
+        if self.session_state != SessionState.PAUSED:
+            raise Exception("Session must be paused to resume.")
+
+        # Accumulate the duration of this pause interval.
+        pause_interval = int(time.time() - self.pause_start_time)
+        self.total_paused_time += pause_interval
+        self.pause_start_time = None
+
+        cursor = self.db.cursor()
+        cursor.execute('''
+            UPDATE sessions SET status = ?, paused_duration = ? WHERE id = ?
+        ''', ('in_progress', self.total_paused_time, self.current_session_id))
+        self.db.commit()
         self.session_state = SessionState.IN_PROGRESS
 
     def log_distraction(self, dtype: DistractionType, duration_seconds: int):
@@ -80,7 +114,14 @@ class SessionManager:
             raise Exception("No active session to end.")
 
         self.session_end_time = time.time()
-        duration = int(self.session_end_time - self.session_start_time)
+
+        # If the session was paused when ended, finalize the open pause interval.
+        if self.session_state == SessionState.PAUSED and self.pause_start_time is not None:
+            self.total_paused_time += int(self.session_end_time - self.pause_start_time)
+            self.pause_start_time = None
+
+        # Subtract all paused time so duration reflects only active focus time.
+        duration = max(0, int(self.session_end_time - self.session_start_time) - self.total_paused_time)
 
         # Aggregate raw distraction_events list into a dict keyed by DistractionType.
         # Rolls up individual events into total count and total time per type,

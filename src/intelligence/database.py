@@ -20,6 +20,7 @@ class Database:
     def _init_db(self):
         self._get_connection()  # Ensure connection is established
         self._create_sessions_table()
+        self._migrate_sessions_table()
         self._create_user_stats_table()
         self._create_events_table()
         self._create_achievements_table()
@@ -68,9 +69,27 @@ class Database:
                 focus_percentage REAL DEFAULT 0,
                 score INTEGER DEFAULT 0,
                 points_earned INTEGER DEFAULT 0,
-                coins_earned INTEGER DEFAULT 0
+                coins_earned INTEGER DEFAULT 0,
+                status TEXT DEFAULT 'in_progress',
+                paused_duration INTEGER DEFAULT 0
             )
         ''')
+
+
+    def _migrate_sessions_table(self):
+        # Add columns introduced after the initial schema without dropping existing data.
+        # ALTER TABLE ADD COLUMN is a no-op if the column already exists would raise an error,
+        # so we check the existing columns first.
+        cursor = self._get_connection().cursor()
+        cursor.execute("PRAGMA table_info(sessions)")
+        existing_columns = {row["name"] for row in cursor.fetchall()}
+        migrations = [
+            ("status",          "TEXT    DEFAULT 'in_progress'"),
+            ("paused_duration", "INTEGER DEFAULT 0"),
+        ]
+        for col_name, col_def in migrations:
+            if col_name not in existing_columns:
+                cursor.execute(f"ALTER TABLE sessions ADD COLUMN {col_name} {col_def}")
 
 
     def _create_user_stats_table(self):
