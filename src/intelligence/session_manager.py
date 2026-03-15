@@ -54,19 +54,11 @@ class SessionManager:
         # Each entry is {"type": DistractionType, "time": seconds}.
         # Populated by log_distraction() and aggregated in end_session() before scoring.
         self.distraction_events = []
-<<<<<<< HEAD
         # Pause tracking: total_pause_duration accumulates across all pause/resume
         # cycles; pause_start_time captures when the current pause began (None when
         # not paused). Both are subtracted from wall-clock time in end_session().
         self.total_pause_duration = 0
         self.pause_start_time = None
-=======
-        # Tracks time spent paused so it can be excluded from duration.
-        # pause_start_time is set on pause and cleared on resume.
-        # total_paused_duration accumulates across multiple pause/resume cycles.
-        self.pause_start_time = None
-        self.total_paused_duration = 0
->>>>>>> 458fcc747dc18e317935ee1d4f31ab36b29f9a22
 
     def reset(self):
         # Resets all session state back to defaults, allowing the instance to be reused.
@@ -77,16 +69,11 @@ class SessionManager:
         self.session_start_time = None
         self.session_end_time = None
         self.distraction_events = []
-<<<<<<< HEAD
         # Pause tracking: total_pause_duration accumulates across all pause/resume
         # cycles; pause_start_time captures when the current pause began (None when
         # not paused). Both are subtracted from wall-clock time in end_session().
         self.total_pause_duration = 0
         self.pause_start_time = None
-=======
-        self.pause_start_time = None
-        self.total_paused_duration = 0
->>>>>>> 458fcc747dc18e317935ee1d4f31ab36b29f9a22
 
     def start_session(self):
         if self.session_state != SessionState.READY:
@@ -130,25 +117,11 @@ class SessionManager:
             raise Exception("Cannot log a distraction outside of an active session.")
         self.distraction_events.append({"type": dtype, "time": duration_seconds})
 
-    def pause_session(self):
-        if self.session_state != SessionState.IN_PROGRESS:
-            raise Exception("Can only pause a session that is in progress.")
-        self.pause_start_time = time.time()
-        self.session_state = SessionState.PAUSED
-
-    def resume_session(self):
-        if self.session_state != SessionState.PAUSED:
-            raise Exception("Can only resume a session that is paused.")
-        self.total_paused_duration += int(time.time() - self.pause_start_time)
-        self.pause_start_time = None
-        self.session_state = SessionState.IN_PROGRESS
-
     def end_session(self):
         if self.session_state not in [SessionState.IN_PROGRESS, SessionState.PAUSED]:
             raise Exception("No active session to end.")
 
         self.session_end_time = time.time()
-<<<<<<< HEAD
 
         # If the session is being ended while paused, the active pause segment was
         # never closed by resume_session(). Close it here so the time is accounted for.
@@ -159,13 +132,6 @@ class SessionManager:
         # Subtract all paused time from wall-clock elapsed to get the true session duration.
         # max(0, ...) guards against clock skew producing a negative value.
         duration = max(0, int(self.session_end_time - self.session_start_time) - self.total_pause_duration)
-=======
-        # If ended while paused, capture the ongoing pause segment so it gets excluded from duration.
-        if self.session_state == SessionState.PAUSED:
-            self.total_paused_duration += int(self.session_end_time - self.pause_start_time)
-            self.pause_start_time = None
-        duration = int(self.session_end_time - self.session_start_time) - self.total_paused_duration
->>>>>>> 458fcc747dc18e317935ee1d4f31ab36b29f9a22
 
         # Aggregate raw distraction_events list into a dict keyed by DistractionType.
         # Rolls up individual events into total count and total time per type,
@@ -232,31 +198,9 @@ class SessionManager:
         ))
         self.db.commit()
 
-<<<<<<< HEAD
         # Update the singleton user_stats row with this session's contributions.
         # Called after the sessions commit so session data is safely stored first.
         self._update_user_stats(duration, points_earned, coins_earned, total_events, look_away_count)
-=======
-        # Update the singleton user_stats row with cumulative stats from this session.
-        # avg_focus_time is recomputed as a rolling average using the new total_sessions count.
-        cursor.execute('''
-            UPDATE user_stats SET
-                total_sessions     = total_sessions + 1,
-                total_time_spent   = total_time_spent + ?,
-                total_distractions = total_distractions + ?,
-                total_look_aways   = total_look_aways + ?,
-                avg_focus_time     = (avg_focus_time * total_sessions + ?) / (total_sessions + 1),
-                updated_at         = ?
-            WHERE id = 1
-        ''', (
-            duration,
-            total_events,
-            look_away_count,
-            focused_time,
-            time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(self.session_end_time)),
-        ))
-        self.db.commit()
->>>>>>> 458fcc747dc18e317935ee1d4f31ab36b29f9a22
 
         self.session_state = SessionState.ENDED
         # Session data is intentionally kept in memory (current_session_id, distraction_events)
