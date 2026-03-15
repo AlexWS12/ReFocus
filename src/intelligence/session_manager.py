@@ -143,6 +143,26 @@ class SessionManager:
         ))
         self.db.commit()
 
+        # Update the singleton user_stats row with cumulative stats from this session.
+        # avg_focus_time is recomputed as a rolling average using the new total_sessions count.
+        cursor.execute('''
+            UPDATE user_stats SET
+                total_sessions     = total_sessions + 1,
+                total_time_spent   = total_time_spent + ?,
+                total_distractions = total_distractions + ?,
+                total_look_aways   = total_look_aways + ?,
+                avg_focus_time     = (avg_focus_time * total_sessions + ?) / (total_sessions + 1),
+                updated_at         = ?
+            WHERE id = 1
+        ''', (
+            duration,
+            total_events,
+            look_away_count,
+            focused_time,
+            time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(self.session_end_time)),
+        ))
+        self.db.commit()
+
         self.session_state = SessionState.ENDED
         # Session data is intentionally kept in memory (current_session_id, distraction_events)
         # until reset() is explicitly called, so session_report() can still be accessed after end.
