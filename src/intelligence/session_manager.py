@@ -42,6 +42,11 @@ class SessionManager:
         # Each entry is {"type": DistractionType, "time": seconds}.
         # Populated by log_distraction() and aggregated in end_session() before scoring.
         self.distraction_events = []
+        # Tracks time spent paused so it can be excluded from duration.
+        # pause_start_time is set on pause and cleared on resume.
+        # total_paused_duration accumulates across multiple pause/resume cycles.
+        self.pause_start_time = None
+        self.total_paused_duration = 0
 
     def reset(self):
         # Resets all session state back to defaults, allowing the instance to be reused.
@@ -52,6 +57,8 @@ class SessionManager:
         self.session_start_time = None
         self.session_end_time = None
         self.distraction_events = []
+        self.pause_start_time = None
+        self.total_paused_duration = 0
 
     def start_session(self):
         if self.session_state != SessionState.READY:
@@ -75,12 +82,29 @@ class SessionManager:
             raise Exception("Cannot log a distraction outside of an active session.")
         self.distraction_events.append({"type": dtype, "time": duration_seconds})
 
+    def pause_session(self):
+        if self.session_state != SessionState.IN_PROGRESS:
+            raise Exception("Can only pause a session that is in progress.")
+        self.pause_start_time = time.time()
+        self.session_state = SessionState.PAUSED
+
+    def resume_session(self):
+        if self.session_state != SessionState.PAUSED:
+            raise Exception("Can only resume a session that is paused.")
+        self.total_paused_duration += int(time.time() - self.pause_start_time)
+        self.pause_start_time = None
+        self.session_state = SessionState.IN_PROGRESS
+
     def end_session(self):
         if self.session_state not in [SessionState.IN_PROGRESS, SessionState.PAUSED]:
             raise Exception("No active session to end.")
 
         self.session_end_time = time.time()
-        duration = int(self.session_end_time - self.session_start_time)
+        # If ended while paused, capture the ongoing pause segment so it gets excluded from duration.
+        if self.session_state == SessionState.PAUSED:
+            self.total_paused_duration += int(self.session_end_time - self.pause_start_time)
+            self.pause_start_time = None
+        duration = int(self.session_end_time - self.session_start_time) - self.total_paused_duration
 
         # Aggregate raw distraction_events list into a dict keyed by DistractionType.
         # Rolls up individual events into total count and total time per type,
