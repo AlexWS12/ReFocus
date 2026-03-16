@@ -10,13 +10,13 @@ Completed work this week also included the calibration animation UX, simplifying
 ## Management
 
 ### Code Reviews
-- [ ] Review Team A's MediaPipe migration PR — verify iris landmarks are correct
-- [ ] Review Team A's structured data output — confirm format matches agreed spec
+- [x] Review Team A's MediaPipe migration PR — verify iris landmarks are correct
+- [x] Review Team A's structured data output — confirm format matches agreed spec
 - [x] Review Team B's calibration flow, detection heuristics, and parameter experimentation — validate their recommended values
 - [ ] Review Team B's structured detection output — confirm format matches spec
 
 ### Team Support
-- [ ] Ensure `mediapipe` is added to `pyproject.toml` dependencies
+- [x] Ensure `mediapipe` is added to `pyproject.toml` dependencies
 - [ ] Answer questions from Team A on MediaPipe landmark indices
 - [x] Answer questions from Team B on YOLO parameter tuning, calibration thresholds, and weak-detection filtering
 - [x] Run both teams' code together and flag any integration issues early
@@ -32,14 +32,14 @@ Completed work this week also included the calibration animation UX, simplifying
 ## Codebase Cleanup
 
 ### Folder Reorganization
-- [ ] Confirm `Trackers/` folder has `__init__.py`
+- [x] Confirm `Trackers/` folder has `__init__.py`
 - [ ] Update `vision/__init__.py` — remove outdated TODOs
 - [ ] Clean up any `__pycache__/` folders from old structure
 - [ ] Verify all imports work after folder renames (`Trackers.iris_tracker`)
 
 ### Dependency Management
 - [x] Ensure `pyproject.toml` has `mediapipe` listed
-- [ ] Run `uv sync` and confirm clean install
+- [x] Run `uv sync` and confirm clean install
 - [ ] Document any version constraints (e.g., mediapipe + Python version compatibility)
 
 ---

@@ -12,7 +12,12 @@ class PhoneCalibration:
     def __init__(self, model_path: str = "yolo26n.pt"):
         self.model = YOLO(model_path)  # Load the base detector once and reuse it for all calibration steps.
         self.animations_dir = os.path.join(os.path.dirname(__file__), "assets", "animations")
+        self.few_shot_bundle_path = os.path.join(os.path.dirname(__file__), "phone_few_shot_bundle.npz")
         self._animation_frames_cache = {}  # Stores per-direction rendered frame sequences.
+        # [INTELLIGENCE TEAM] calibration_data is the primary output of the calibration process.
+        # get_optimal_params() packages these values into runtime detection settings for the
+        # phone-detection pipeline. Keys include confidence thresholds, lighting quality, and
+        # per-phase appearance similarity gates.
         self.calibration_data = {
             "avg_confidence": 0.0,  # Mean confidence across accepted calibration samples.
             "optimal_conf_threshold": 0.5,  # Default fallback until calibration computes a better threshold.
@@ -27,6 +32,11 @@ class PhoneCalibration:
             "lighting_quality": "unknown",  # Qualitative label derived from average confidence.
             "calibrated": False,  # Flips to True only after enough usable samples are collected.
         }
+
+    @staticmethod
+    def get_few_shot_bundle_path() -> str:
+        """Return the persisted few-shot bundle path shared by calibrator and runtime camera."""
+        return os.path.join(os.path.dirname(__file__), "phone_few_shot_bundle.npz")
 
     def _load_rotation_frames(self, direction: str) -> list:
         """Load and cache frames from the GIF rotation guide for this direction."""
@@ -85,6 +95,9 @@ class PhoneCalibration:
 
     def _draw_rotation_preview(self, frame, direction: str, elapsed_seconds: float):
         """Overlay the right/left GIF preview in the calibration frame."""
+        # [UX/UI TEAM] Animated GIF panel shows users exactly how to rotate the phone.
+        # Panel is positioned top-right so it does not overlap the guide box or the
+        # progress/appearance-score text at the bottom of the frame.
         frames = self._load_rotation_frames(direction)
         preview = None
         if frames:
@@ -132,6 +145,10 @@ class PhoneCalibration:
 
     def _draw_guide_box(self, frame, active=False):
         """Draw the phone placement guide box."""
+        # [UX/UI TEAM] Color signals detection state to the user:
+        # yellow = waiting for alignment, green = phone locked in.
+        # Dimensions are computed relative to frame size in _get_guide_box() so the
+        # box scales correctly across different camera resolutions.
         x1, y1, x2, y2 = self._get_guide_box(frame.shape)
         color = (0, 255, 0) if active else (0, 255, 255)  # Green = locked in, yellow = waiting for alignment.
         cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)  # Draw the actual placement target.
@@ -156,6 +173,9 @@ class PhoneCalibration:
 
     def _box_metrics(self, best_box, frame_shape):
         """Return normalized geometry values used for phase validation."""
+        # [INTELLIGENCE TEAM] All values are normalized to [0, 1] so they are
+        # camera-resolution-agnostic — downstream models can compare them directly
+        # without adjusting for different capture resolutions.
         h, w = frame_shape[:2]
         x1, y1, x2, y2 = map(int, best_box.xyxy[0])
         bw = max(1, x2 - x1)
@@ -185,8 +205,18 @@ class PhoneCalibration:
             return None
         return frame[cy1:cy2, cx1:cx2]
 
+    def _normalize_crop_for_bundle(self, crop, size: int = 96):
+        """Convert an arbitrary crop into a compact fixed-size exemplar image."""
+        if crop is None or crop.size == 0:
+            return None
+        return cv2.resize(crop, (size, size), interpolation=cv2.INTER_AREA)
+
     def _compute_few_shot_signature(self, crop) -> np.ndarray:
         """Create a compact, normalized appearance signature from a phone crop."""
+        # [INTELLIGENCE TEAM] The 257-element signature (256 H/S histogram bins +
+        # 1 edge-density scalar) is unit-normed so a dot product directly equals
+        # cosine similarity. This is the core appearance descriptor used to verify a
+        # detection actually matches the user's specific device across rotations.
         if crop is None or crop.size == 0:
             return None
 
@@ -208,6 +238,10 @@ class PhoneCalibration:
 
     def _few_shot_similarity(self, signature: np.ndarray, exemplars: list) -> float:
         """Return max cosine similarity against learned appearance exemplars."""
+        # [INTELLIGENCE TEAM] Max-similarity (1-nearest-neighbour) keeps matching
+        # tolerant across the full range of viewpoints collected during calibration.
+        # Improving exemplar bank diversity raises precision without needing a
+        # stricter gate value.
         if signature is None or not exemplars:
             return 0.0
         sims = [float(np.dot(signature, ex)) for ex in exemplars if ex is not None]
@@ -215,6 +249,9 @@ class PhoneCalibration:
 
     def _estimate_few_shot_threshold(self, exemplars: list) -> float:
         """Estimate a conservative similarity gate from exemplar self-consistency."""
+        # [INTELLIGENCE TEAM] The gate auto-tunes: a visually consistent exemplar
+        # bank yields a higher inter-exemplar median and therefore a tighter gate.
+        # A diverse bank (many viewpoints) returns a looser gate to stay inclusive.
         if len(exemplars) < 3:
             return 0.45
         sims = []
@@ -248,6 +285,44 @@ class PhoneCalibration:
             pool.extend(few_shot_banks.get(phase_kind, []))
         return pool
 
+    def _save_few_shot_bundle(self, few_shot_banks: dict, crop_banks: dict, few_shot_thresholds: dict):
+        """Persist few-shot exemplars and thresholds to a single overwriteable bundle file."""
+        signatures = []
+        images = []
+        phase_labels = []
+
+        for phase_name in ("steady", "right_rotation", "left_rotation"):
+            sig_bank = few_shot_banks.get(phase_name, [])
+            img_bank = crop_banks.get(phase_name, [])
+            count = min(len(sig_bank), len(img_bank))
+            for idx in range(count):
+                signatures.append(sig_bank[idx])
+                images.append(img_bank[idx])
+                phase_labels.append(phase_name)
+
+        if not signatures or not images:
+            return False
+
+        np.savez_compressed(
+            self.few_shot_bundle_path,
+            signatures=np.asarray(signatures, dtype=np.float32),
+            images=np.asarray(images, dtype=np.uint8),
+            phases=np.asarray(phase_labels, dtype="U16"),
+            threshold_steady=np.float32(few_shot_thresholds.get("steady", 0.45)),
+            threshold_right=np.float32(few_shot_thresholds.get("right_rotation", 0.42)),
+            threshold_left=np.float32(few_shot_thresholds.get("left_rotation", 0.42)),
+            threshold_global=np.float32(
+                min(
+                    few_shot_thresholds.get("steady", 0.45),
+                    few_shot_thresholds.get("right_rotation", 0.42),
+                    few_shot_thresholds.get("left_rotation", 0.42),
+                )
+            ),
+            conf_threshold=np.float32(self.calibration_data.get("optimal_conf_threshold", 0.35)),
+            updated_at=np.int64(time.time()),
+        )
+        return True
+
     def _rotation_valid(self, metrics, baseline, direction, phase_start_x):
         """Heuristic check for side rotation. This is a proxy, not a perfect 3D angle measurement."""
         # Right/left rotation makes the visible phone face appear narrower and smaller.
@@ -264,6 +339,9 @@ class PhoneCalibration:
 
     def _draw_rotation_arrow(self, frame, direction: str, guide_box: tuple):
         """Draw a smooth anti-aliased arc arrow using Pillow."""
+        # [UX/UI TEAM] The arc and arrowhead are drawn with Pillow for anti-aliasing;
+        # the direction label is then added via cv2, which renders small fonts more
+        # crisply than PIL at typical calibration window sizes.
         from PIL import Image, ImageDraw
         h, w = frame.shape[:2]
         gx1, gy1, gx2, gy2 = guide_box
@@ -317,6 +395,9 @@ class PhoneCalibration:
 
     def _wait_for_phone_in_box(self, cap, hold_seconds=1.5):
         """Wait until the user places the phone in the guide box steadily."""
+        # [UX/UI TEAM] The 1.5 s hold requirement prevents an accidental pass through
+        # the box from triggering calibration. The on-screen countdown ("Hold steady: Xs")
+        # gives the user explicit feedback on how long they need to hold.
         stable_since = None  # Timestamp marking when the phone first became valid and centered.
 
         while True:
@@ -380,6 +461,9 @@ class PhoneCalibration:
         Freeze the feed and show a timeout screen.
         Returns 'retry' to redo the current phase, or 'quit' to abort.
         """
+        # [UX/UI TEAM] The 0.55 dim overlay ensures prompt text is legible regardless
+        # of what was in the live frame. [R]/[Q] keys are shown on-screen so users
+        # do not need to remember bindings from the earlier calibration screens.
         while True:
             ret, frame = cap.read()
             if not ret:
@@ -426,6 +510,11 @@ class PhoneCalibration:
         baseline_metrics = []
         baseline = None
         few_shot_banks = {
+            "steady": [],
+            "right_rotation": [],
+            "left_rotation": [],
+        }
+        crop_banks = {
             "steady": [],
             "right_rotation": [],
             "left_rotation": [],
@@ -555,7 +644,11 @@ class PhoneCalibration:
                                 if valid_frames % 2 == 0:
                                     crop = self._extract_phone_crop(frame, best_box)
                                     sig = self._compute_few_shot_signature(crop)
-                                    self._add_signature_if_novel(few_shot_banks["steady"], sig, max_count=14)
+                                    added = self._add_signature_if_novel(few_shot_banks["steady"], sig, max_count=14)
+                                    if added:
+                                        normalized = self._normalize_crop_for_bundle(crop)
+                                        if normalized is not None:
+                                            crop_banks["steady"].append(normalized)
 
                         elif phase["kind"] == "right_rotation" and baseline is not None and recenter_ready:
                             if phase_start_x is None:
@@ -578,6 +671,10 @@ class PhoneCalibration:
                                     crop = self._extract_phone_crop(frame, best_box)
                                     sig = self._compute_few_shot_signature(crop)
                                     added = self._add_signature_if_novel(few_shot_banks["right_rotation"], sig, max_count=12)
+                                    if added:
+                                        normalized = self._normalize_crop_for_bundle(crop)
+                                        if normalized is not None:
+                                            crop_banks["right_rotation"].append(normalized)
                                     if added and len(few_shot_banks["right_rotation"]) >= 3:
                                         updated = self._estimate_few_shot_threshold(few_shot_banks["right_rotation"])
                                         few_shot_thresholds["right_rotation"] = float(np.clip(updated - 0.03, 0.32, 0.82))
@@ -602,6 +699,10 @@ class PhoneCalibration:
                                     crop = self._extract_phone_crop(frame, best_box)
                                     sig = self._compute_few_shot_signature(crop)
                                     added = self._add_signature_if_novel(few_shot_banks["left_rotation"], sig, max_count=12)
+                                    if added:
+                                        normalized = self._normalize_crop_for_bundle(crop)
+                                        if normalized is not None:
+                                            crop_banks["left_rotation"].append(normalized)
                                     if added and len(few_shot_banks["left_rotation"]) >= 3:
                                         updated = self._estimate_few_shot_threshold(few_shot_banks["left_rotation"])
                                         few_shot_thresholds["left_rotation"] = float(np.clip(updated - 0.03, 0.32, 0.82))
@@ -676,8 +777,10 @@ class PhoneCalibration:
                         if phase["kind"] == "steady":
                             baseline_metrics.clear()  # Discard stale baseline samples before re-collecting.
                             few_shot_banks["steady"].clear()
+                            crop_banks["steady"].clear()
                         else:
                             few_shot_banks[phase["kind"]].clear()
+                            crop_banks[phase["kind"]].clear()
                         continue
                     else:
                         cap.release()
@@ -715,6 +818,14 @@ class PhoneCalibration:
                 cap.release()
                 cv2.destroyAllWindows()
                 return {"error": "Validation cancelled by user"}
+
+            # Persist only after user accepted validation.
+            result["few_shot_bundle_saved"] = self._save_few_shot_bundle(
+                few_shot_banks,
+                crop_banks,
+                few_shot_thresholds,
+            )
+            result["few_shot_bundle_path"] = self.few_shot_bundle_path
         
         cap.release()
         cv2.destroyAllWindows()
@@ -726,6 +837,10 @@ class PhoneCalibration:
         Let user verify detection is working with calibrated parameters.
         Returns: 'accept', 'retry', or 'cancel'
         """
+        # [UX/UI TEAM] 10 s auto-accept keeps the flow moving for users who are
+        # satisfied without pressing anything; [R] lets skeptical users restart.
+        # [INTELLIGENCE TEAM] Detection here runs with the newly computed conf_threshold
+        # so users see exactly the sensitivity the runtime pipeline will use.
         if not cap.isOpened():
             cap = cv2.VideoCapture(0)
         
@@ -863,6 +978,9 @@ class PhoneCalibration:
             "calibrated": True,  # Signals that get_optimal_params() can trust the computed values.
         }
 
+        # [INTELLIGENCE TEAM] 'data' contains every tuned parameter the downstream
+        # runtime detector should consume. Prefer get_optimal_params() for a clean
+        # dict; avoid parsing 'recommendation' string for automation.
         return {
             "success": True,
             "message": f"Calibration complete! Lighting: {lighting}",
@@ -877,6 +995,9 @@ class PhoneCalibration:
 
     def get_optimal_params(self) -> dict:
         """Return optimized detection parameters after calibration."""
+        # [INTELLIGENCE TEAM] Primary interface for downstream consumers. Call this
+        # after run_calibration() completes and pass the returned dict directly into
+        # the phone-detection pipeline (conf, augment, few_shot gates, class filter).
         if not self.calibration_data["calibrated"]:
             return {"conf": 0.5, "augment": False}  # defaults
 

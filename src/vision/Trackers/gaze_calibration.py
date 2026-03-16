@@ -14,6 +14,10 @@ class GazeCalibrator:
         self.tracker = gazeTracker()
 
     def _target_position(self, target_name: str, w: int, h: int) -> tuple[int, int]:
+        # [UX/UI TEAM] 12 % margin keeps targets away from bezels and taskbars
+        # where users cannot comfortably look without rotating their head.
+        # [INTELLIGENCE TEAM] These pixel positions define the spatial anchors for
+        # yaw/pitch bounds; changing the margin directly affects envelope coverage.
         margin_x = int(w * 0.12)
         margin_y = int(h * 0.12)
         if target_name == "center":
@@ -27,6 +31,8 @@ class GazeCalibrator:
         return (w - margin_x, h - margin_y)
 
     def _draw_target(self, frame, target_name: str):
+        # [UX/UI TEAM] A crosshair (two lines) rather than a filled circle minimises
+        # occlusion of the exact pixel the user needs to fixate on.
         h, w = frame.shape[:2]
         tx, ty = self._target_position(target_name, w, h)
         cv.line(frame, (tx - 16, ty), (tx + 16, ty), (0, 255, 255), 2)
@@ -93,6 +99,8 @@ class GazeCalibrator:
 
                 if landmarks is not None:
                     pitch, yaw, roll, _, _, _, _ = self.tracker.estimate_head_pose(landmarks, frame)
+                    # [INTELLIGENCE TEAM] Raw head-pose angles in degrees, stored per target.
+                    # Center-subtracted versions of these become the gaze envelope bounds.
                     bucket["yaw"].append(float(yaw))
                     bucket["pitch"].append(float(pitch))
                     bucket["roll"].append(float(roll))
@@ -102,6 +110,8 @@ class GazeCalibrator:
 
                 last_detection_ts = now
 
+            # [UX/UI TEAM] Live sample counter acts as a progress bar so users know
+            # exactly how many samples are needed before they can press [N] to advance.
             cv.putText(
                 frame,
                 f"Target samples: {len(bucket['yaw'])}/{self.samples_per_target}",
@@ -115,6 +125,7 @@ class GazeCalibrator:
             cv.imshow("Gaze Calibration", frame)
             key = cv.waitKey(1) & 0xFF
 
+            # [UX/UI TEAM] Always allow immediate escape so users cannot get stuck.
             if key == ord("q"):
                 cap.release()
                 cv.destroyAllWindows()
@@ -133,10 +144,15 @@ class GazeCalibrator:
         cap.release()
         cv.destroyAllWindows()
 
+        # [INTELLIGENCE TEAM] Median is used instead of mean to suppress blink-related
+        # pose spikes that occasionally contaminate the center-target sample window.
         center_yaw = float(np.median(np.array(samples["center"]["yaw"], dtype=np.float64)))
         center_pitch = float(np.median(np.array(samples["center"]["pitch"], dtype=np.float64)))
         center_roll = float(np.median(np.array(samples["center"]["roll"], dtype=np.float64)))
 
+        # [INTELLIGENCE TEAM] All corner samples are expressed relative to the center
+        # offset, not as absolute angles. This makes the envelope user-specific and
+        # independent of the user's natural resting head posture.
         corrected_yaw = []
         corrected_pitch = []
         corrected_roll = []
@@ -150,12 +166,19 @@ class GazeCalibrator:
 
         # Small expansion helps avoid false "away" on micro-movements.
         margin_deg = 2.0
+        # [INTELLIGENCE TEAM] yaw_min/yaw_max and pitch_min/pitch_max form the
+        # "on-screen gaze" envelope. Any pose outside this box is classified as
+        # gaze-away. roll_threshold is a separate head-tilt guard computed below.
         yaw_min = float(min(corrected_yaw) - margin_deg)
         yaw_max = float(max(corrected_yaw) + margin_deg)
         pitch_min = float(min(corrected_pitch) - margin_deg)
         pitch_max = float(max(corrected_pitch) + margin_deg)
         roll_threshold = float(max(12.0, np.percentile(np.abs(np.array(corrected_roll, dtype=np.float64)), 95) + 3.0))
 
+        # [INTELLIGENCE TEAM] The profile dict is the calibration contract between
+        # the data-collection phase and the runtime attention tracker. version=2
+        # indicates the center-offset + corner-envelope schema. Pass this to
+        # tracker.set_calibration_profile() to activate it in the live pipeline.
         profile = {
             "version": 2,
             "center_offsets": {

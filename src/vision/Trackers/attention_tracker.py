@@ -30,13 +30,15 @@ class gazeTracker:
         self.calibration_file = calibration_file or os.path.join(
             os.path.dirname(__file__), "gaze_center_calibration.json"
         )
-        self.center_offsets = self._load_center_offsets()
-        self.calibrated_bounds = self._load_attention_bounds()
 
-        # If absolute angle exceeds these values, we treat attention as away.
+        # Thresholds must be set before _load_attention_bounds() so they can
+        # be used as fallback defaults when the calibration file is missing fields.
         self.yaw_threshold_deg = 18.0
         self.pitch_threshold_deg = 15.0
         self.roll_threshold_deg = 22.0
+
+        self.center_offsets = self._load_center_offsets()
+        self.calibrated_bounds = self._load_attention_bounds()
 
         # Performance controls: do not run full face-landmarker on every frame.
         self.frame_skip = 2  # Evaluate at most every Nth frame.
