@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QStackedWidget, QVBoxLayout
-from src.core.database_reader import DatabaseReader
+from src.core.qApplication import QApplication
 from src.experience.side_bar import Sidebar
 from src.experience.pages.dashboard import Dashboard
 from src.experience.pages.session import Session
@@ -12,8 +12,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.database_reader = DatabaseReader()
-        self.data = self.database_reader.get_topbar_data()
+        app = QApplication.instance()
+        self.data = app.database_reader.get_topbar_data()
 
         # set up the main window
         self.setWindowTitle("Study Tracker Partner")
