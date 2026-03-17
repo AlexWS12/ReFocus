@@ -32,12 +32,12 @@
 - [ ] Detect if the user is looking at the screen vs looking away (gaze estimation)
 - [ ] Track blink detection using the eye aspect ratio (distance between upper/lower eyelid landmarks)
 - [ ] Explore: could we use iris tracking to determine how long someone has been focused?
-- [x] Try combining iris tracking with the camera feed from `camera.py` *(Integrated eyeTracker into Camera class)*
+- [x] Try combining iris tracking with the camera feed from `camera.py` *(Integrated gazeTracker into Camera class)*
 
 ## Notes
 
 ### What Was Built
-Haar cascade-based `eyeTracker` class using OpenCV for face/eye detection. Integrated into `camera.py`. Returns annotated frames with rectangles (face=blue, eyes=green). Should upgrade to MediaPipe for better accuracy.
+Haar cascade-based `gazeTracker` class using OpenCV for face/eye detection. Integrated into `camera.py`. Returns annotated frames with rectangles (face=blue, eyes=green). Should upgrade to MediaPipe for better accuracy.
 
 ### Next Steps
 - [ ] Return structured detection data (not just annotated frames)

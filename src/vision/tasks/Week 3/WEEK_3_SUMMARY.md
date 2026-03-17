@@ -8,7 +8,7 @@ Both teams completed their core integration tasks. The vision pipeline now has l
 ## Team A — Eye/Iris Tracking (Shah & Alex)
 
 **Completed:**
-- Built `eyeTracker` class using OpenCV Haar cascades
+- Built `gazeTracker` class using OpenCV Haar cascades
 - Face detection (blue rectangles) + eye detection (green rectangles)
 - Integrated into `camera.py` alongside phone detection
 - Created architecture recommendations for attention monitoring
