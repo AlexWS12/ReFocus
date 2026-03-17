@@ -1,0 +1,17 @@
+QCalendarWidget QToolButton {
+    font-size: 10px;
+    padding: 2px;
+    min-width: 20px;
+    min-height: 20px;
+}
+QCalendarWidget QSpinBox {
+    font-size: 11px;
+    min-width: 50px;
+}
+QCalendarWidget QAbstractItemView:enabled {
+    font-size: 11px;
+    padding: 2px;
+}
+QCalendarWidget QWidget#qt_calendar_navigationbar {
+    min-height: 24px;
+}

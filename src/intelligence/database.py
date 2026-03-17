@@ -167,3 +167,14 @@ class Database:
         if self.conn:
             self.conn.close()
             self.conn = None
+
+
+# Singleton accessor: returns a shared SQLite connection so all callers
+# (SessionManager, etc.) operate on the same DB without opening multiple handles.
+_db_instance = None
+
+def get_database():
+    global _db_instance
+    if _db_instance is None:
+        _db_instance = Database()
+    return _db_instance._get_connection()
