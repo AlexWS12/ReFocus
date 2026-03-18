@@ -460,6 +460,121 @@ class PhoneCalibration:
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 return {"error": "Calibration cancelled"}
 
+    def _capture_rotation_snapshot(
+        self,
+        cap,
+        current_frame,
+        phase_kind: str,
+        baseline: dict,
+        few_shot_banks: dict,
+        crop_banks: dict,
+        few_shot_thresholds: dict,
+        burst_count: int = 8,
+        burst_interval_ms: int = 80,
+    ) -> int:
+        """Capture a quick burst of frames when the user presses SPACE during a rotation phase.
+
+        Instead of relying on the continuous frame-by-frame validator to catch the
+        phone at just the right angle, this lets the user *intentionally* freeze at
+        the desired rotation and trigger a burst capture.  The burst uses a lower
+        YOLO confidence threshold and a more lenient rotation check so angled phones
+        with unusual cases are much more likely to be accepted.
+
+        Args:
+            cap: OpenCV VideoCapture already open.
+            current_frame: The live frame at the moment SPACE was pressed (included in burst).
+            phase_kind: ``"right_rotation"`` or ``"left_rotation"``.
+            baseline: Geometry baseline dict from the steady phase.
+            few_shot_banks / crop_banks / few_shot_thresholds: Mutated in place.
+            burst_count: Number of frames to capture.
+            burst_interval_ms: Delay between captures (ms).
+
+        Returns:
+            Number of valid frames collected (added to ``valid_frames`` in caller).
+        """
+        # Collect burst frames — first is the frame already on screen when SPACE hit.
+        burst_frames = [current_frame]
+        for _ in range(burst_count - 1):
+            ret, f = cap.read()
+            if ret:
+                burst_frames.append(f.copy())
+            cv2.waitKey(burst_interval_ms)
+
+        # Flash "Capturing…" so the user knows their press registered.
+        show = burst_frames[0].copy()
+        h_s, w_s = show.shape[:2]
+        cv2.putText(
+            show, "Capturing...", (w_s // 2 - 120, h_s // 2),
+            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 2, cv2.LINE_AA,
+        )
+        cv2.imshow("Phone Calibration", show)
+        cv2.waitKey(1)
+
+        phase_exemplars = self._phase_exemplars(few_shot_banks, phase_kind)
+        phase_threshold = few_shot_thresholds.get(phase_kind, 0.42)
+        valid_count = 0
+
+        for bf in burst_frames:
+            # Lower threshold here so angled / unusual-case phones aren't missed.
+            best_box, in_box, _ = self._find_phone_in_box(bf, conf=0.15)
+            if best_box is None or not in_box:
+                continue
+
+            metrics = self._box_metrics(best_box, bf.shape)
+
+            # Relaxed rotation check: size/area reduction vs baseline is enough —
+            # we trust the user pressed SPACE at the right angle, so skip drift gating.
+            if baseline is not None:
+                size_ok = (
+                    metrics["width_norm"] <= baseline["width_norm"] * 0.85
+                    or metrics["area_ratio"] <= baseline["area_ratio"] * 0.85
+                )
+                if not size_ok:
+                    continue
+
+            # Appearance similarity — more lenient than the continuous path so
+            # partially-turned phones still enrich the exemplar bank.
+            if phase_exemplars:
+                crop = self._extract_phone_crop(bf, best_box)
+                sig = self._compute_few_shot_signature(crop)
+                score = self._few_shot_similarity(sig, phase_exemplars)
+                if score < max(0.22, phase_threshold - 0.18):
+                    continue
+
+            # Valid frame — add to exemplar bank if it adds new view diversity.
+            crop = self._extract_phone_crop(bf, best_box)
+            sig = self._compute_few_shot_signature(crop)
+            added = self._add_signature_if_novel(few_shot_banks[phase_kind], sig, max_count=12)
+            if added:
+                norm_crop = self._normalize_crop_for_bundle(crop)
+                if norm_crop is not None:
+                    crop_banks[phase_kind].append(norm_crop)
+            valid_count += 1
+
+        # Re-estimate threshold from the enriched bank.
+        bank = few_shot_banks[phase_kind]
+        if len(bank) >= 3:
+            updated = self._estimate_few_shot_threshold(bank)
+            few_shot_thresholds[phase_kind] = float(np.clip(updated - 0.03, 0.30, 0.82))
+
+        # Brief result overlay so the user knows whether the snapshot counted.
+        result_frame = burst_frames[-1].copy()
+        h_r, w_r = result_frame.shape[:2]
+        if valid_count >= 3:
+            msg = f"Snapshot OK — {valid_count}/{burst_count} frames valid"
+            color = (0, 255, 100)
+        else:
+            msg = f"Only {valid_count} valid — rotate farther and press SPACE again"
+            color = (0, 100, 255)
+        cv2.putText(
+            result_frame, msg, (20, h_r // 2),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.75, color, 2, cv2.LINE_AA,
+        )
+        cv2.imshow("Phone Calibration", result_frame)
+        cv2.waitKey(900)
+
+        return valid_count
+
     def _prompt_retry_or_quit(self, cap, phase_name: str) -> str:
         """
         Freeze the feed and show a timeout screen.
@@ -600,6 +715,10 @@ class PhoneCalibration:
                 # Main instruction
                 cv2.putText(frame, phase["instruction"], (10, 75),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                if rotation_phase:
+                    cv2.putText(frame, "Press SPACE to snapshot current angle",
+                                (10, 97), cv2.FONT_HERSHEY_SIMPLEX, 0.52,
+                                (140, 255, 180), 1, cv2.LINE_AA)
                 
                 # Run detection on the clean camera frame (not the UI-overlay frame).
                 raw_frame = frame.copy()
@@ -749,10 +868,18 @@ class PhoneCalibration:
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
                 
                 cv2.imshow("Phone Calibration", frame)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('q'):
                     cap.release()
                     cv2.destroyAllWindows()
                     return {"error": "Calibration cancelled"}
+                elif key == ord(' ') and rotation_phase and baseline is not None:
+                    # Snapshot capture: user manually triggers a burst at their chosen angle.
+                    snap_valid = self._capture_rotation_snapshot(
+                        cap, frame.copy(), phase["kind"], baseline,
+                        few_shot_banks, crop_banks, few_shot_thresholds,
+                    )
+                    valid_frames += snap_valid
 
                 # Move on only when validation requirements are met.
                 if valid_frames >= phase["required_valid_frames"]:
