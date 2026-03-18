@@ -23,6 +23,15 @@ Improve phone labeling correctness beyond box-only gating by combining spatial, 
 - Team B: phone-label correctness implementation + metrics
 - Team Lead: integration contract, telemetry, release gating
 
+## Team Lead Implementation Update (Completed)
+- Researched practical methods to improve phone-recognition correctness and selected YOLO + Grounding DINO hybrid detection.
+- Enabled ByteTrack on the YOLO path using `self.model.track(..., tracker="bytetrack.yaml", persist=True, verbose=False)` to maintain Kalman-filtered track continuity between frames.
+- Extracted per-detection track IDs from `box.id` and extended detection candidates to include track identity: `(x1, y1, x2, y2, conf, source, track_id)`.
+- Kept DINO candidates trackless (`track_id=None`) since ByteTrack applies only to YOLO outputs.
+- Added track-aware appearance gating: when current detection matches last confirmed track, lowered similarity threshold by `0.05` (with a floor at `0.30`) to reduce dropouts during rotation/occlusion.
+- Added `_active_track_id` lifecycle update each frame, resetting to `None` when no phone is accepted.
+- Updated annotation format to include tracking context (example: `PHONE(YOLO #3) 87%  sim:0.71`).
+
 ## Exit Criteria
 - False positives reduced in guide-box scenarios
 - Minimal detection flicker
