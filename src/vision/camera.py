@@ -394,6 +394,9 @@ class Camera:
             if self._look_away_distraction_start is not None:
                 self._look_away_distraction_start = None
                 self._look_away_last_seen = None
+            if self._left_desk_distraction_start is not None:  # clear left-desk too; phone wins
+                self._left_desk_distraction_start = None
+                self._left_desk_last_seen = None
             return
 
         # --- Left-desk distraction (face absent; user physically left desk) ---
@@ -405,20 +408,21 @@ class Camera:
                 self._look_away_last_seen = None
             if self._left_desk_distraction_start is None:
                 self._left_desk_distraction_start = now  # open event the first frame face is gone
-            self._left_desk_last_seen = now  # refresh while face remains absent
+            self._left_desk_last_seen = now  # refresh every frame face stays absent so cooldown resets
         else:
-            # Face is present — check whether a left-desk event has finished its cooldown.
+            # Face reappeared — the user is back; check if open left-desk event has cooled down.
             if self._left_desk_distraction_start is not None:
                 if now - self._left_desk_last_seen >= self._DISTRACTION_COOLDOWN:
+                    # Same start→last_seen duration rule: don't count the cooldown wait as desk-leave time
                     duration = max(1, int(self._left_desk_last_seen - self._left_desk_distraction_start))
                     try:
                         self._session_manager.log_distraction(_DistractionType.LEFT_DESK_DISTRACTION, duration)
                     except Exception:
-                        pass
+                        pass  # Session may not be IN_PROGRESS; never crash the camera loop
                     self._left_desk_distraction_start = None
                     self._left_desk_last_seen = None
 
-            # --- Look-away (only meaningful when face is present) ---
+            # --- Look-away (only evaluated when face is present; left-desk takes priority above) ---
             if looking_away:
                 if self._look_away_distraction_start is None:
                     self._look_away_distraction_start = now  # open a new look-away event
@@ -476,7 +480,7 @@ class Camera:
             self._look_away_last_seen = None
 
         if self._left_desk_distraction_start is not None:
-            end = self._left_desk_last_seen or time.time()
+            end = self._left_desk_last_seen or time.time()  # same rationale as phone flush above
             duration = max(1, int(end - self._left_desk_distraction_start))
             try:
                 self._session_manager.log_distraction(_DistractionType.LEFT_DESK_DISTRACTION, duration)
