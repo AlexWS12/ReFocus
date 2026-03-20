@@ -10,7 +10,8 @@ Runs as a background loop feeding distraction events into `SessionManager`.
 ```
 src/vision/
 ├── camera.py                   # Main detection loop — YOLO + DINO + attention tracker, distraction logging
-├── menu.py                     # CLI startup menu: launch camera, phone calibration, gaze calibration
+├── tests/
+│   ├── menu.py                 # CLI startup menu: launch camera, phone calibration, gaze calibration
 ├── phone_calibration.py        # Interactive per-user phone calibration (guide box + rotation phases + few-shot learning)
 ├── phone_few_shot_bundle.npz   # Persisted calibration output: appearance signatures + tuned thresholds
 ├── dino_detector.py            # Grounding DINO zero-shot phone detector (lazy-loads HuggingFace weights)
@@ -48,7 +49,7 @@ from camera import Camera
 cam = Camera(session_manager=my_session_manager)
 ```
 
-### `menu.py`
+### `tests/menu.py`
 CLI entry point for the vision subsystem. Options:
 - Launch camera loop
 - Run phone calibration
@@ -84,7 +85,7 @@ Corner-based gaze calibration. Asks the user to look at each screen corner, reco
 
 - **Phone distraction** — opens when a phone is first accepted; stays open during a 5-second cooldown so brief flickers don't split one event into many; logs via `log_distraction(PHONE_DISTRACTION, duration)` when the cooldown expires.
 - **Look-away distraction** — same cooldown logic using head-pose `face_facing_screen`.
-- **Priority suppression** — while a phone event is active (including its cooldown window), look-away tracking is suppressed to avoid double-counting the same inattention window under two types.
+- **Priority suppression** — phone takes priority only while events overlap in the same frame; phone cooldown does not suppress non-phone tracking.
 - **Flush on exit** — `Camera.release()` calls `_flush_open_distractions()` so any event still open when the camera closes is logged using `last_seen` as the end time (not the shutdown timestamp).
 
 ---
@@ -93,7 +94,7 @@ Corner-based gaze calibration. Asks the user to look at each screen corner, reco
 
 ```bash
 # From src/vision/
-python menu.py
+python tests/menu.py
 
 # Or directly:
 python camera.py   # runs calibration then opens the detection window

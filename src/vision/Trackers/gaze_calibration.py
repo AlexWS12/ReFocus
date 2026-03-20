@@ -47,10 +47,10 @@ class GazeCalibrator:
         targets = ["center", "top_left", "top_right", "bottom_left", "bottom_right"]
         labels = {
             "center": "CENTER",
-            "top_left": "TOP LEFT",
-            "top_right": "TOP RIGHT",
-            "bottom_left": "BOTTOM LEFT",
-            "bottom_right": "BOTTOM RIGHT",
+            "top_left": "TOP RIGHT",
+            "top_right": "TOP LEFT",
+            "bottom_left": "BOTTOM RIGHT",
+            "bottom_right": "BOTTOM LEFT",
         }
         samples = {name: {"yaw": [], "pitch": [], "roll": []} for name in targets}
 

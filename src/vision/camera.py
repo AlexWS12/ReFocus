@@ -273,6 +273,7 @@ class Camera:
         best_coords = None
         best_conf = -1.0
         best_similarity = 0.0
+        best_is_fallback = False
         fallback_coords = None
         fallback_conf = -1.0
 
@@ -322,6 +323,7 @@ class Camera:
             best_coords = fallback_coords
             best_conf = fallback_conf
             best_similarity = 0.0  # Indicate it's a fallback
+            best_is_fallback = True
 
         # --- Annotate ---
         if best_coords is not None:
@@ -357,7 +359,10 @@ class Camera:
         annotated = self.eye_tracker.track_eyes(annotated)
 
         # --- Distraction event logging ---
-        self._update_distraction_tracking(best_coords is not None)
+        # Fallback detections are intentionally visual-only; they help with overlay
+        # continuity but are not trusted enough to suppress/look-away logging.
+        phone_detected_for_tracking = best_coords is not None and not best_is_fallback
+        self._update_distraction_tracking(phone_detected_for_tracking)
 
         return frame, annotated
 
@@ -369,9 +374,10 @@ class Camera:
         that window, the event continues seamlessly.  Duration is measured
         from start to last-seen (not start to cooldown-expiry).
 
-        Priority: phone distraction outranks look-away.  While a phone event
-        is active (including its cooldown window), look-away tracking is
-        suppressed so the same time is not double-counted.
+        Priority: phone distraction outranks look-away/left-desk only while
+        they overlap in the same frame. Once phone is no longer detected,
+        non-phone tracking can continue immediately (phone cooldown does not
+        suppress other types).
         """
         if self._session_manager is None or _DistractionType is None:
             return
@@ -404,17 +410,29 @@ class Camera:
                 self._phone_distraction_start = None
                 self._phone_last_seen = None
 
-        # --- Look-away distraction (suppressed while phone event is active) ---
-        # A phone event includes its cooldown window: even if the phone just left the
-        # frame, we don't start counting a new look-away until the phone event fully closes.
-        phone_active = self._phone_distraction_start is not None
-        if phone_active:
-            # Phone takes priority — drop any in-progress look-away or left-desk so the same
-            # distraction window isn't counted twice under two different types.
+        # --- Same-frame priority suppression (phone wins only on overlap) ---
+        # If phone is currently detected, finalize any open non-phone event up to its
+        # own last_seen boundary, then skip non-phone tracking for this frame only.
+        # This avoids double-counting overlapping moments without suppressing unrelated
+        # look-away/left-desk events during the phone cooldown window.
+        if phone_detected:
             if self._look_away_distraction_start is not None:
+                end = self._look_away_last_seen or now
+                duration = max(1, int(end - self._look_away_distraction_start))
+                try:
+                    self._session_manager.log_distraction(_DistractionType.LOOK_AWAY_DISTRACTION, duration)
+                except Exception:
+                    pass
                 self._look_away_distraction_start = None
                 self._look_away_last_seen = None
-            if self._left_desk_distraction_start is not None:  # clear left-desk too; phone wins
+
+            if self._left_desk_distraction_start is not None:
+                end = self._left_desk_last_seen or now
+                duration = max(1, int(end - self._left_desk_distraction_start))
+                try:
+                    self._session_manager.log_distraction(_DistractionType.LEFT_DESK_DISTRACTION, duration)
+                except Exception:
+                    pass
                 self._left_desk_distraction_start = None
                 self._left_desk_last_seen = None
             return
