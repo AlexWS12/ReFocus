@@ -1,5 +1,5 @@
 # camera.py
-# Main vision module combining phone detection (YOLO + Grounding DINO) and eye tracking.
+# Main vision module that combines phone detection (YOLO) and eye tracking.
 
 from ultralytics import YOLO
 import cv2 as cv
@@ -7,40 +7,26 @@ import numpy as np
 import os
 from Trackers.attention_tracker import gazeTracker
 from phone_calibration import PhoneCalibration
-from dino_detector import DinoDetector
 
 
 class Camera:
-    """Manages webcam capture, phone detection (YOLO + Grounding DINO), and eye tracking.
+    """Manages webcam capture, phone detection (YOLO), and eye tracking.
 
-    Detection strategy
-    ------------------
-    YOLO runs every ``yolo_frame_skip`` frames (fast, ~10–30 ms); cached boxes are
-    reused in between.  Grounding DINO is used as a supplemental detector: it runs
-    every ``_DINO_RUN_INTERVAL`` frames *and* immediately whenever YOLO produces zero
-    candidates.  Results from both models are merged with IoU-based deduplication so
-    the same phone is never double-counted.  DINO detections are shown in a distinct
-    orange colour to make the source easy to spot during debugging.
+    Designed to run as a lightweight background process.  YOLO is frame-skipped
+    so inference only fires every ``yolo_frame_skip`` frames; cached boxes are
+    reused in between via ByteTrack continuity.
     """
 
-    _DINO_RUN_INTERVAL = 5  # run DINO at least once every N frames for freshness
-
     def __init__(self, model_path="yolo26n.pt"):
-        """Initialise camera, YOLO, Grounding DINO, and eye tracker."""
+        """Initialise camera, YOLO model, and eye tracker."""
         self.model = YOLO(model_path)
         self.cap = cv.VideoCapture(0)  # Open default webcam (index 0)
         self.eye_tracker = gazeTracker()
         self.detection_params = {"conf": 0.35}  # Default detection confidence; overwritten after calibration
-        self.few_shot_signatures = []           # Appearance exemplars saved during phone calibration
+        self.few_shot_signatures = []            # Appearance exemplars saved during phone calibration
         self.few_shot_similarity_threshold = 0.45  # Min cosine similarity to accept a detection as a phone
         self.few_shot_bundle_path = PhoneCalibration.get_few_shot_bundle_path()
         self.calibrated = False  # True after a successful phone calibration run
-
-        # Grounding DINO — lazy-loads weights on first use
-        self.dino = DinoDetector()
-        self._dino_frame_count = 0
-        self._dino_last_run_frame = -self._DINO_RUN_INTERVAL  # force early run
-        self._dino_last_detections: list = []  # cached (x1,y1,x2,y2,score) tuples
 
         # Frame-skip controls: YOLO only runs every Nth frame.
         # ByteTrack maintains bounding-box continuity on skipped frames, so
@@ -116,28 +102,11 @@ class Camera:
         y2 = y1 + box_height
         return x1, y1, x2, y2
 
-    @staticmethod
-    def _iou(a, b) -> float:
-        """Intersection-over-Union for two (x1, y1, x2, y2) boxes."""
-        ax1, ay1, ax2, ay2 = a
-        bx1, by1, bx2, by2 = b
-        ix1 = max(ax1, bx1)
-        iy1 = max(ay1, by1)
-        ix2 = min(ax2, bx2)
-        iy2 = min(ay2, by2)
-        inter = max(0, ix2 - ix1) * max(0, iy2 - iy1)
-        if inter == 0:
-            return 0.0
-        union = (ax2 - ax1) * (ay2 - ay1) + (bx2 - bx1) * (by2 - by1) - inter
-        return inter / max(1, union)
-
     # ------------------------------------------------------------------
     # Appearance-matching helpers
     # ------------------------------------------------------------------
 
-    def _extract_crop_from_coords(
-        self, frame, x1, y1, x2, y2, pad_ratio: float = 0.12
-    ):
+    def _extract_crop_from_coords(self, frame, x1, y1, x2, y2, pad_ratio: float = 0.12):
         """Crop and pad around raw pixel coordinates for few-shot matching."""
         h, w = frame.shape[:2]
         bw = max(1, x2 - x1)
@@ -215,7 +184,7 @@ class Camera:
     # ------------------------------------------------------------------
 
     def read_frame(self):
-        """Capture a frame, run phone detection (YOLO + DINO) and eye tracking.
+        """Capture a frame, run phone detection and eye tracking.
 
         Returns:
             tuple: (original_frame, annotated_frame) or None if capture fails.
@@ -223,12 +192,9 @@ class Camera:
         Detection pipeline
         ------------------
         1. YOLO inference — every ``yolo_frame_skip`` frames; cached boxes reused in between.
-        2. Grounding DINO — every ``_DINO_RUN_INTERVAL`` frames OR immediately
-           when YOLO finds nothing.  Results are cached; non-overlapping DINO
-           boxes are merged into the candidate pool.
-        3. Spatial filter — guide-box gate when uncalibrated.
-        4. Appearance filter — few-shot cosine-similarity gate when calibrated.
-        5. Best-confidence selection.
+        2. Spatial filter — guide-box gate when uncalibrated.
+        3. Appearance filter — few-shot cosine-similarity gate when calibrated.
+        4. Best-confidence selection.
         """
         ret, frame = self.cap.read()
         if not ret:
@@ -272,43 +238,13 @@ class Camera:
             )
         self._yolo_frame_counter += 1
 
-        # Collect YOLO hits as plain tuples: (x1, y1, x2, y2, conf, source)
-        candidates: list = []
-        for box in self._last_yolo_results[0].boxes:
-            x1, y1, x2, y2 = map(int, box.xyxy[0])
-            candidates.append((x1, y1, x2, y2, float(box.conf[0]), "yolo"))
-
-        # --- Grounding DINO (supplemental / fallback) ---
-        self._dino_frame_count += 1
-        frames_since_dino = self._dino_frame_count - self._dino_last_run_frame
-        run_dino = (not candidates and frames_since_dino >= 2) or (
-            frames_since_dino >= self._DINO_RUN_INTERVAL
-        )
-        if run_dino and self.dino.available:
-            self._dino_last_run_frame = self._dino_frame_count
-            # Use a slightly lower threshold so DINO catches borderline cases
-            dino_conf = max(0.15, yolo_conf * 0.75)
-            self._dino_last_detections = self.dino.detect(
-                frame, conf_threshold=dino_conf
-            )
-
-        # Merge DINO boxes that don't substantially overlap any YOLO detection
-        for dx1, dy1, dx2, dy2, dconf in self._dino_last_detections:
-            dbox = (dx1, dy1, dx2, dy2)
-            overlaps_yolo = any(
-                self._iou(dbox, (cx1, cy1, cx2, cy2)) > 0.3
-                for cx1, cy1, cx2, cy2, _, _ in candidates
-            )
-            if not overlaps_yolo:
-                candidates.append((dx1, dy1, dx2, dy2, dconf, "dino"))
-
-        # --- Spatial + appearance filtering; pick best ---
+        # --- Spatial + appearance filtering; pick best candidate ---
         best_coords = None
         best_conf = -1.0
         best_similarity = 0.0
-        best_source = "yolo"
 
-        for x1, y1, x2, y2, conf, source in candidates:
+        for box in self._last_yolo_results[0].boxes:
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
             center_x = (x1 + x2) // 2
             center_y = (y1 + y2) // 2
 
@@ -330,25 +266,23 @@ class Camera:
                     continue  # Looks too different from calibration exemplars — skip
 
             # Keep only the highest-confidence box that passed all filters
+            conf = float(box.conf[0])
             if conf > best_conf:
                 best_conf = conf
                 best_coords = (x1, y1, x2, y2)
                 best_similarity = similarity
-                best_source = source
 
         # --- Annotate ---
         if best_coords is not None:
             x1, y1, x2, y2 = best_coords
-            # Green = YOLO confirmed, orange = DINO caught what YOLO missed
-            color = (0, 255, 0) if best_source == "yolo" else (0, 200, 255)
-            cv.rectangle(annotated, (x1, y1), (x2, y2), color, 3)
+            cv.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 3)
             cv.putText(
                 annotated,
-                f"PHONE({best_source.upper()}) {best_conf:.0%}  sim:{best_similarity:.2f}",
+                f"PHONE {best_conf:.0%}  sim:{best_similarity:.2f}",
                 (x1, y1 - 10),
                 cv.FONT_HERSHEY_SIMPLEX,
                 0.65,
-                color,
+                (0, 255, 0),
                 2,
             )
         else:

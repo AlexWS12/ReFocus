@@ -23,8 +23,9 @@ def launch_camera() -> None:
             data = cam.read_frame()
             if data is None:
                 break
-            _, annotated = data
+            _, annotated = data  # data is (raw_frame, annotated_frame); we only need the overlay
             cv.imshow("StudyWidget Vision", annotated)
+            # waitKey(1) keeps the event loop alive; 0xFF mask strips platform-specific high bits
             if cv.waitKey(1) & 0xFF == ord("q"):
                 break
     finally:
@@ -62,6 +63,8 @@ def main() -> None:
             )
         )
 
+        # Drain any keys that were pressed while the previous option was running so
+        # they don't immediately fire the next questionary prompt.
         while msvcrt.kbhit():
             msvcrt.getch()
 
@@ -75,6 +78,7 @@ def main() -> None:
             ],
         ).ask()
 
+        # choice is None when the user hits Ctrl-C inside questionary.
         if choice is None or choice.startswith("4"):
             console.print("[cyan]Exiting vision menu.[/cyan]")
             break
