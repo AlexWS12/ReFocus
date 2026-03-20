@@ -5,8 +5,8 @@ from ultralytics import YOLO
 import cv2 as cv
 import numpy as np
 import os
-from Trackers.attention_tracker import gazeTracker
-from phone_calibration import PhoneCalibration
+from src.vision.Trackers.attention_tracker import gazeTracker
+from src.vision.phone_calibration import PhoneCalibration
 
 
 class Camera:

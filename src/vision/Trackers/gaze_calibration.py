@@ -3,7 +3,7 @@ import mediapipe as mp
 import numpy as np
 import time
 
-from Trackers.attention_tracker import gazeTracker
+from src.vision.Trackers.attention_tracker import gazeTracker
 
 
 class GazeCalibrator:

@@ -4,9 +4,9 @@ from rich.console import Console
 from rich.panel import Panel
 import questionary
 
-from camera import Camera
-from phone_calibration import PhoneCalibration
-from Trackers.gaze_calibration import GazeCalibrator
+from src.vision.camera import Camera
+from src.vision.phone_calibration import PhoneCalibration
+from src.vision.Trackers.gaze_calibration import GazeCalibrator
 
 
 console = Console()

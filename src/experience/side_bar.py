@@ -1,3 +1,4 @@
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QWidget, QVBoxLayout
 from src.experience.button import Button
 
@@ -10,6 +11,8 @@ class Sidebar(QWidget):
     def __init__(self, main_window : MainWindow):
         super().__init__()
         self.main_window = main_window
+        self.setObjectName("sidebar")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         # layout for sidebar
         self.layout = QVBoxLayout() 
@@ -40,9 +43,13 @@ class Sidebar(QWidget):
         achievements_button = Button("Achievement")
         achievements_button.clicked.connect(lambda: self.main_window.pages_stack.setCurrentIndex(4))
 
+        settings_button = Button("Settings")
+        settings_button.clicked.connect(lambda: self.main_window.pages_stack.setCurrentIndex(5))
+
         self.add_items(dashboard_button)
         self.add_items(session_button)
         self.add_items(report_button)
         self.add_items(virtualPet_button)
         self.add_items(achievements_button)
+        self.add_items(settings_button)
 

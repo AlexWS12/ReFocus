@@ -10,6 +10,7 @@ from src.experience.widgets.previous_session import PreviousSession
 class Dashboard(QWidget):
     def __init__(self, parent: None):
         super().__init__(parent)
+        self.setObjectName("pageRoot")
 
         self.app = QApplication.instance()
 
@@ -39,11 +40,10 @@ class Dashboard(QWidget):
 
         # add start session button to the layout
         start_btn = Button("Start Session")
-        start_btn.clicked.connect(self.start_session)
+        start_btn.setObjectName("startSessionButton")
+        start_btn.clicked.connect(self.start_setup)
         self.layout.addWidget(start_btn)
+
+    def start_setup(self):
+        self.app.main_window.pages_stack.setCurrentIndex(6)
     
-    # start session and show the pet window
-    def start_session(self):
-        self.app.main_window.hide()
-        self.app.pet_window.show()
-        self.app.position_pet_window()

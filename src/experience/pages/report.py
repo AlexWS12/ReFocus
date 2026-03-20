@@ -9,6 +9,7 @@ from src.experience.widgets.total_exp import TotalExp
 class Report(QWidget):
     def __init__(self, parent: None):
         super().__init__(parent)
+        self.setObjectName("pageRoot")
 
         self.app = QApplication.instance()
 

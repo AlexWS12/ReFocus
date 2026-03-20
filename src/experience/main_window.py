@@ -1,3 +1,4 @@
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMainWindow, QWidget, QHBoxLayout, QStackedWidget, QVBoxLayout
 from src.core.qApplication import QApplication
 from src.experience.side_bar import Sidebar
@@ -6,6 +7,8 @@ from src.experience.pages.session import Session
 from src.experience.pages.report import Report
 from src.experience.pages.virtualPet import VirtualPet
 from src.experience.pages.achievements import Achievements
+from src.experience.pages.settings import Settings
+from src.experience.pages.setup import Setup
 from src.experience.widgets.top_bar import TopBar
 
 class MainWindow(QMainWindow):
@@ -22,13 +25,21 @@ class MainWindow(QMainWindow):
 
         # main container for the main window
         self.main_container = QWidget()
+        self.main_container.setObjectName("mainContainer")
+        self.main_container.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.layout = QHBoxLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
         self.main_container.setLayout(self.layout)
         self.setCentralWidget(self.main_container)
 
         # container for the top bar and pages
         self.topbar_pages_container = QWidget()
+        self.topbar_pages_container.setObjectName("mainContent")
+        self.topbar_pages_container.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.topbar_pages_layout = QVBoxLayout()
+        self.topbar_pages_layout.setContentsMargins(0, 0, 0, 0)
+        self.topbar_pages_layout.setSpacing(0)
         self.topbar_pages_container.setLayout(self.topbar_pages_layout)
 
         # add sidebar and top bar pages container to main layout
@@ -41,6 +52,7 @@ class MainWindow(QMainWindow):
 
         # intialize stacked pages
         self.pages_stack = QStackedWidget()
+        self.pages_stack.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         # add pages to stack
         self.pages_stack.addWidget(Dashboard(self))
@@ -48,6 +60,8 @@ class MainWindow(QMainWindow):
         self.pages_stack.addWidget(Report(self))
         self.pages_stack.addWidget(VirtualPet(self))
         self.pages_stack.addWidget(Achievements(self))
+        self.pages_stack.addWidget(Settings(self))
+        self.pages_stack.addWidget(Setup(self))
         self.pages_stack.setCurrentIndex(0)
         
         self.topbar_pages_layout.addWidget(self.pages_stack)
