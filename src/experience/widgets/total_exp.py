@@ -10,4 +10,4 @@ class TotalExp(QWidget):
         self.setLayout(self.layout)
 
         self.layout.addWidget(CenteredLabel("Total Exp"))
-        self.layout.addWidget(CenteredLabel(f"{parent.data['total_exp']}"))
+        self.layout.addWidget(CenteredLabel(f"{parent.data['total_exp']}", secondary=True))

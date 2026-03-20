@@ -13,9 +13,9 @@ class QApplication(QApplication):
         super().__init__()
 
         # Load global stylesheet
-        style_path = Path(__file__).resolve().parent.parent / "experience" / "style" / "theme.qss"
-        if style_path.exists():
-            self.setStyleSheet(style_path.read_text())
+        self.load_stylesheet("light.qss")
+        self.style_path = "light.qss"
+
 
         # initialize stats reader
         self.database_reader = DatabaseReader()
@@ -47,3 +47,10 @@ class QApplication(QApplication):
         x = rect.right() - pw - margin
         y = rect.bottom() - ph - margin
         self.pet_window.move(x, y)
+
+    def load_stylesheet(self, theme: str):
+        style_path = (
+            Path(__file__).resolve().parent.parent / "experience" / "style" / theme
+        )
+        if style_path.exists():
+            self.setStyleSheet(style_path.read_text())

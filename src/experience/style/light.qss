@@ -1,10 +1,18 @@
 QMainWindow {
-    background-color: rgb(255, 255, 255);
+    background-color: #000000;
     color: rgb(34, 34, 34);
 }
 
 QWidget {
     color: rgb(34, 34, 34);
+}
+
+QWidget#mainContainer {
+    background-color: #000000;
+}
+
+QWidget#mainContent {
+    background-color: rgb(255, 255, 255);
 }
 
 QCalendarWidget QToolButton {
@@ -48,11 +56,11 @@ QCalendarWidget {
 
 QWidget#sidebar {
     background-color: #1a2744;
-    color: rgb(255, 255, 255);
+    color: #ffffff;
 }
 
 QWidget#sidebar * {
-    color: rgb(255, 255, 255);
+    color: #ffffff;
 }
 
 QWidget#sidebar QPushButton {

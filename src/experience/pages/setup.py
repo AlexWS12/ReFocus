@@ -7,6 +7,7 @@ from src.experience.widgets.vision_stream import VisionStream
 class Setup(QWidget):
     def __init__(self, parent: None):
         super().__init__(parent)
+        self.setObjectName("pageRoot")
 
         self.app = QApplication.instance()
 

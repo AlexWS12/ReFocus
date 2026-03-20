@@ -10,6 +10,7 @@ from src.experience.widgets.previous_session import PreviousSession
 class Dashboard(QWidget):
     def __init__(self, parent: None):
         super().__init__(parent)
+        self.setObjectName("pageRoot")
 
         self.app = QApplication.instance()
 

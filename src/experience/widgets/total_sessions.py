@@ -10,4 +10,6 @@ class TotalSessions(QWidget):
         self.setLayout(self.layout)
 
         self.layout.addWidget(CenteredLabel("Total Sessions"))
-        self.layout.addWidget(CenteredLabel(f"{parent.data['session_analytics']['total_sessions']}"))
+        self.layout.addWidget(
+            CenteredLabel(f"{parent.data['session_analytics']['total_sessions']}", secondary=True)
+        )

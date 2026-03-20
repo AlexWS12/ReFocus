@@ -9,6 +9,7 @@ class VisionStream(QWidget):
         self.app = QtApplication.instance()
         self.vision_manager = self.app.vision_manager
         self.image_label = QLabel("Camera is idle")
+        self.image_label.setObjectName("secondaryLabel")
         self.image_label.setAlignment(Qt.AlignCenter)
 
         layout = QVBoxLayout(self)
