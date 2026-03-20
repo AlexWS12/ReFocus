@@ -24,7 +24,7 @@ class Camera:
         self.eye_tracker = gazeTracker()
         self.detection_params = {"conf": 0.35}  # Default detection confidence; overwritten after calibration
         self.few_shot_signatures = []            # Appearance exemplars saved during phone calibration
-        self.few_shot_similarity_threshold = 0.45  # Min cosine similarity to accept a detection as a phone
+        self.few_shot_similarity_threshold = 0.30  # Min cosine similarity to accept a detection as a phone
         self.few_shot_bundle_path = PhoneCalibration.get_few_shot_bundle_path()
         self.calibrated = False  # True after a successful phone calibration run
 
@@ -65,7 +65,7 @@ class Camera:
             self.few_shot_similarity_threshold = (
                 float(bundle["threshold_global"])
                 if "threshold_global" in bundle.files
-                else 0.45
+                else 0.30
             )
 
             # Mirror the confidence level the calibrator found optimal so runtime matches calibration behavior
@@ -242,6 +242,8 @@ class Camera:
         best_coords = None
         best_conf = -1.0
         best_similarity = 0.0
+        fallback_coords = None
+        fallback_conf = -1.0
 
         for box in self._last_yolo_results[0].boxes:
             x1, y1, x2, y2 = map(int, box.xyxy[0])
@@ -256,21 +258,39 @@ class Camera:
                 ):
                     continue
 
+            conf = float(box.conf[0])
+
             # Few-shot appearance filter: reject detections that don't look like the calibrated phone
             similarity = 1.0
+            rejected = False
             if self.detection_params.get("few_shot_enabled", False):
                 crop = self._extract_crop_from_coords(frame, x1, y1, x2, y2)
                 sig = self._compute_few_shot_signature(crop)
                 similarity = self._few_shot_similarity(sig)
+                print(f"YOLO conf: {conf:.3f}, Similarity: {similarity:.3f}, Threshold: {self.few_shot_similarity_threshold:.3f}")
                 if similarity < self.few_shot_similarity_threshold:
-                    continue  # Looks too different from calibration exemplars — skip
+                    print("Rejected due to low similarity")
+                    # Keep track of high-confidence fallback
+                    if conf > 0.5 and conf > fallback_conf:  # High confidence fallback
+                        fallback_conf = conf
+                        fallback_coords = (x1, y1, x2, y2)
+                    rejected = True
+
+            if rejected:
+                continue
 
             # Keep only the highest-confidence box that passed all filters
-            conf = float(box.conf[0])
             if conf > best_conf:
                 best_conf = conf
                 best_coords = (x1, y1, x2, y2)
                 best_similarity = similarity
+
+        # Fallback: if no good match but high-confidence detection available, use it
+        if best_coords is None and fallback_coords is not None:
+            print("Using high-confidence fallback detection")
+            best_coords = fallback_coords
+            best_conf = fallback_conf
+            best_similarity = 0.0  # Indicate it's a fallback
 
         # --- Annotate ---
         if best_coords is not None:
