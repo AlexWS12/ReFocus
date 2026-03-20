@@ -15,6 +15,7 @@ class Setup(QWidget):
 
         # add start session button to the layout
         start_btn = Button("Start Session")
+        start_btn.setObjectName("startSessionButton")
         start_btn.clicked.connect(self.start_session)
         self.layout.addWidget(start_btn)
 

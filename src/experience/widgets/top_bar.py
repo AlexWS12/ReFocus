@@ -15,6 +15,8 @@ class TopBar(QWidget):
         self.level = CenteredLabel(f"Level {parent.data['level']}")
         self.exp = CenteredLabel(f"{parent.data['exp']} xp")
         self.coin = CenteredLabel(f"{parent.data['coins']} coins")
+        self.exp.setObjectName("xpLabel")
+        self.coin.setObjectName("coinLabel")
 
         # Add Widget to layout
         self.layout.addWidget(self.level)

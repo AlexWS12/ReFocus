@@ -1,3 +1,4 @@
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QWidget, QVBoxLayout
 from src.experience.button import Button
 
@@ -10,6 +11,8 @@ class Sidebar(QWidget):
     def __init__(self, main_window : MainWindow):
         super().__init__()
         self.main_window = main_window
+        self.setObjectName("sidebar")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         # layout for sidebar
         self.layout = QVBoxLayout() 
