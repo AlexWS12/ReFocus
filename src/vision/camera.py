@@ -24,7 +24,7 @@ class Camera:
         self.eye_tracker = gazeTracker()
         self.detection_params = {"conf": 0.35}  # Default detection confidence; overwritten after calibration
         self.few_shot_signatures = []            # Appearance exemplars saved during phone calibration
-        self.few_shot_similarity_threshold = 0.40  # Min cosine similarity to accept a detection as a phone
+        self.few_shot_similarity_threshold = 0.30  # Min cosine similarity to accept a detection as a phone
         self.few_shot_bundle_path = PhoneCalibration.get_few_shot_bundle_path()
         self.calibrated = False  # True after a successful phone calibration run
 
@@ -65,7 +65,7 @@ class Camera:
             self.few_shot_similarity_threshold = (
                 float(bundle["threshold_global"])
                 if "threshold_global" in bundle.files
-                else 0.40
+                else 0.30
             )
 
             # Mirror the confidence level the calibrator found optimal so runtime matches calibration behavior
@@ -271,7 +271,7 @@ class Camera:
                 if similarity < self.few_shot_similarity_threshold:
                     print("Rejected due to low similarity")
                     # Keep track of high-confidence fallback
-                    if conf > 0.6 and conf > fallback_conf:  # High confidence fallback
+                    if conf > 0.5 and conf > fallback_conf:  # High confidence fallback
                         fallback_conf = conf
                         fallback_coords = (x1, y1, x2, y2)
                     rejected = True

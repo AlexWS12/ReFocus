@@ -22,11 +22,11 @@ class PhoneCalibration:
             "optimal_conf_threshold": 0.5,  # Default fallback until calibration computes a better threshold.
             "detections_count": 0,  # Number of accepted samples collected during calibration.
             "few_shot_samples": 0,  # Number of appearance exemplars captured during steady phase.
-            "few_shot_similarity_threshold": 0.40,  # Global fallback similarity gate.
+            "few_shot_similarity_threshold": 0.30,  # Global fallback similarity gate.
             "few_shot_similarity_thresholds": {
-                "steady": 0.40,
-                "right_rotation": 0.37,
-                "left_rotation": 0.37,
+                "steady": 0.30,
+                "right_rotation": 0.27,
+                "left_rotation": 0.27,
             },
             "lighting_quality": "unknown",  # Qualitative label derived from average confidence.
             "calibrated": False,  # Flips to True only after enough usable samples are collected.
@@ -157,7 +157,7 @@ class PhoneCalibration:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.65, color, 2)
         return x1, y1, x2, y2
 
-    def _find_phone_in_box(self, frame, conf=0.2):
+    def _find_phone_in_box(self, frame, conf=0.15):
         """Return the strongest phone detection and whether it is centered in the guide box."""
         results = self.model(frame, classes=[67], conf=conf, verbose=False)  # Class 67 is COCO's cell phone label.
         boxes = results[0].boxes  # YOLO returns all detections for the frame here.
@@ -254,7 +254,7 @@ class PhoneCalibration:
         # bank yields a higher inter-exemplar median and therefore a tighter gate.
         # A diverse bank (many viewpoints) returns a looser gate to stay inclusive.
         if len(exemplars) < 3:
-            return 0.40
+            return 0.30
         sims = []
         for i in range(len(exemplars)):
             for j in range(i + 1, len(exemplars)):
@@ -262,7 +262,7 @@ class PhoneCalibration:
         if not sims:
             return 0.45
         # Margin below median keeps the gate tolerant to moderate rotation/lighting shifts.
-        return float(np.clip(np.median(sims) - 0.10, 0.35, 0.85))
+        return float(np.clip(np.median(sims) - 0.05, 0.25, 0.85))
 
     def _add_signature_if_novel(self, bank: list, signature: np.ndarray, max_count: int = 14) -> bool:
         """Append signature only if it adds view diversity to the bank."""
@@ -338,9 +338,9 @@ class PhoneCalibration:
         # Accept if the phone clearly looks edge-on plus directional movement.
         return (narrow_enough or area_reduced) and drift_ok
 
-    def _wait_for_phone_in_box(self, cap, hold_seconds=1.5):
+    def _wait_for_phone_in_box(self, cap, hold_seconds=1.0):
         """Wait until the user places the phone in the guide box steadily."""
-        # [UX/UI TEAM] The 1.5 s hold requirement prevents an accidental pass through
+        # [UX/UI TEAM] The 1.0 s hold requirement prevents an accidental pass through
         # the box from triggering calibration. The on-screen countdown ("Hold steady: Xs")
         # gives the user explicit feedback on how long they need to hold.
         stable_since = None  # Timestamp marking when the phone first became valid and centered.
@@ -361,7 +361,7 @@ class PhoneCalibration:
             box = self._draw_guide_box(frame, active=stable_since is not None)
             guide_x1, guide_y1, guide_x2, guide_y2 = box
 
-            best_box, in_box, _ = self._find_phone_in_box(raw_frame, conf=0.2)  # Use low threshold during setup to avoid missing borderline poses.
+            best_box, in_box, _ = self._find_phone_in_box(raw_frame, conf=0.15)  # Use low threshold during setup to avoid missing borderline poses.
 
             cv2.putText(frame, "CALIBRATION READY", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 255), 2)
@@ -594,7 +594,7 @@ class PhoneCalibration:
             {
                 "name": "PHASE 1",
                 "instruction": "Hold phone steady in the box",
-                "required_valid_frames": 12,  # Lowered from 18 — fewer steady frames needed to baseline.
+                "required_valid_frames": 8,  # Lowered from 12 — fewer steady frames needed to baseline.
                 "max_seconds": 20,
                 "kind": "steady",
                 "collect": True,
@@ -602,7 +602,7 @@ class PhoneCalibration:
             {
                 "name": "PHASE 2",
                 "instruction": "Rotate phone RIGHT about 90 degrees",
-                "required_valid_frames": 7,  # Lowered from 10 — easier to hit with relaxed thresholds.
+                "required_valid_frames": 5,  # Lowered from 7 — easier to hit with relaxed thresholds.
                 "max_seconds": 25,
                 "kind": "right_rotation",
                 "collect": True,
@@ -610,7 +610,7 @@ class PhoneCalibration:
             {
                 "name": "PHASE 3",
                 "instruction": "Rotate phone LEFT about 90 degrees",
-                "required_valid_frames": 7,  # Lowered from 10.
+                "required_valid_frames": 5,  # Lowered from 7.
                 "max_seconds": 25,
                 "kind": "left_rotation",
                 "collect": True,
@@ -666,7 +666,7 @@ class PhoneCalibration:
                 # Run detection on the clean camera frame (not the UI-overlay frame).
                 raw_frame = frame.copy()
                 if phase["collect"]:
-                    best_box, in_box, _ = self._find_phone_in_box(raw_frame, conf=0.2)
+                    best_box, in_box, _ = self._find_phone_in_box(raw_frame, conf=0.15)
                     
                     if best_box is not None:
                         conf = float(best_box.conf[0])
