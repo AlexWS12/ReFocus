@@ -1,5 +1,4 @@
 import cv2
-import math
 import numpy as np
 import os
 import time
@@ -118,8 +117,9 @@ class PhoneCalibration:
         cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, frame)
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 200, 255), 2)
 
-        title = "RIGHT ROTATION PREVIEW" if direction == "right" else "LEFT ROTATION PREVIEW"
-        cv2.putText(frame, title, (x1 + 8, y1 + 22), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 200, 255), 1)
+        title = "ROTATE RIGHT" if direction == "right" else "ROTATE LEFT"
+        cv2.putText(frame, title, (x1 + 8, y1 + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 200, 255), 1)
+        cv2.putText(frame, "(your view, not camera)", (x1 + 8, y1 + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.33, (160, 160, 160), 1)
 
         if preview is not None and (y1 + 32 + preview.shape[0]) <= y2:
             py1 = y1 + 32
@@ -337,62 +337,6 @@ class PhoneCalibration:
 
         # Accept if the phone clearly looks edge-on plus directional movement.
         return (narrow_enough or area_reduced) and drift_ok
-
-    def _draw_rotation_arrow(self, frame, direction: str, guide_box: tuple):
-        """Draw a smooth anti-aliased arc arrow using Pillow."""
-        # [UX/UI TEAM] The arc and arrowhead are drawn with Pillow for anti-aliasing;
-        # the direction label is then added via cv2, which renders small fonts more
-        # crisply than PIL at typical calibration window sizes.
-        from PIL import Image, ImageDraw
-        h, w = frame.shape[:2]
-        gx1, gy1, gx2, gy2 = guide_box
-        guide_cy = (gy1 + gy2) // 2
-        R = 52
-        color_rgb = (255, 200, 0)   # warm yellow — RGB for PIL
-        color_bgr = (0, 200, 255)   # same color — BGR for cv2 label text
-
-        # Convert BGR frame to RGB PIL image so Pillow can draw anti-aliased shapes.
-        pil_img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        draw = ImageDraw.Draw(pil_img)
-
-        if direction == "right":
-            cx = min(gx2 + R + 15, w - R - 5)  # place arc to the right of the guide box
-            arc_start, arc_end = 240, 120        # ¾ C opening left; PIL wraps clockwise past 360
-            tip_ang = math.radians(120)          # angle (screen-clockwise from 3-o'clock) of the arc endpoint
-            label = "ROTATE RIGHT"
-        else:
-            cx = max(gx1 - R - 15, R + 5)       # place arc to the left of the guide box
-            arc_start, arc_end = 60, 300         # ¾ C opening right
-            tip_ang = math.radians(300)
-            label = "ROTATE LEFT"
-
-        # Anti-aliased arc — cv2.ellipse does not support LINE_AA for thick arcs.
-        bbox = [cx - R, guide_cy - R, cx + R, guide_cy + R]
-        draw.arc(bbox, start=arc_start, end=arc_end, fill=color_rgb, width=5)
-
-        # Filled arrowhead triangle at the arc endpoint.
-        # Clockwise tangent vector in screen coords at angle θ: (-sin θ, cos θ).
-        tx, ty   = math.cos(tip_ang), math.sin(tip_ang)  # unit radius vector at tip
-        tant_x   = -ty                                    # clockwise tangent x = -sin(tip_ang)
-        tant_y   =  tx                                    # clockwise tangent y =  cos(tip_ang)
-        perp_x, perp_y = tant_y, -tant_x                 # perpendicular (radial direction) for base width
-
-        tip_x = cx + R * tx
-        tip_y = guide_cy + R * ty
-        arr = 14  # arrowhead length in pixels
-        apex   = (tip_x + arr * tant_x,           tip_y + arr * tant_y)
-        base_l = (tip_x + arr * 0.45 * perp_x,    tip_y + arr * 0.45 * perp_y)
-        base_r = (tip_x - arr * 0.45 * perp_x,    tip_y - arr * 0.45 * perp_y)
-        draw.polygon([apex, base_l, base_r], fill=color_rgb)
-
-        # Write Pillow changes back into the OpenCV BGR frame in-place.
-        frame[:] = cv2.cvtColor(np.asarray(pil_img), cv2.COLOR_RGB2BGR)
-
-        # Label via cv2 with LINE_AA — PIL's built-in font is too pixelated at small sizes.
-        label_x = cx - 55
-        label_y = min(guide_cy + R + 22, h - 8)
-        cv2.putText(frame, label, (label_x, label_y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_bgr, 2, cv2.LINE_AA)
 
     def _wait_for_phone_in_box(self, cap, hold_seconds=1.5):
         """Wait until the user places the phone in the guide box steadily."""
@@ -696,10 +640,9 @@ class PhoneCalibration:
                 cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
                 guide_box = self._draw_guide_box(frame)
 
-                # Draw directional arc arrow for rotation phases so the user knows which way to turn.
+                # Draw GIF rotation preview for rotation phases.
                 if phase["kind"] in ("right_rotation", "left_rotation"):
                     direction = "right" if phase["kind"] == "right_rotation" else "left"
-                    self._draw_rotation_arrow(frame, direction, guide_box)
                     phase_elapsed = time.time() - phase_start
                     self._draw_rotation_preview(frame, direction, phase_elapsed)
 

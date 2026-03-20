@@ -20,9 +20,9 @@ class gazeTracker:
 
         options = vision.FaceLandmarkerOptions(
             base_options=BaseOptions(model_asset_path=model_path),
-            output_face_blendshapes=False,
-            output_facial_transformation_matrixes=False,
-            num_faces=1,
+            output_face_blendshapes=False,          # Blendshapes (smile, blink, etc.) not needed here.
+            output_facial_transformation_matrixes=False,  # We compute head pose ourselves via solvePnP.
+            num_faces=1,                            # Only track the primary user; ignore bystanders.
         )
         self.detector = vision.FaceLandmarker.create_from_options(options)
         self.landmarks = None
@@ -33,6 +33,10 @@ class gazeTracker:
 
         # Thresholds must be set before _load_attention_bounds() so they can
         # be used as fallback defaults when the calibration file is missing fields.
+        # These values represent the maximum degrees of head rotation away from
+        # screen center before the tracker classifies the user as "away".
+        # Yaw (left/right) is most sensitive to phone distraction, so its threshold
+        # is tighter than roll (head tilt), which rarely indicates true inattention.
         self.yaw_threshold_deg = 18.0
         self.pitch_threshold_deg = 15.0
         self.roll_threshold_deg = 22.0
@@ -41,6 +45,8 @@ class gazeTracker:
         self.calibrated_bounds = self._load_attention_bounds()
 
         # Performance controls: do not run full face-landmarker on every frame.
+        # The dual gate (frame_skip AND wall-clock) avoids overloading both slow
+        # cameras (few frames to skip) and fast CPUs (many frames per second).
         self.frame_skip = 2  # Evaluate at most every Nth frame.
         self.detection_interval_seconds = 0.20  # Also cap by wall-clock (~5 Hz max updates).
         self.draw_pose_axes = False  # Axis rendering is useful for debug but costs extra compute.
@@ -177,6 +183,8 @@ class gazeTracker:
         """Annotate frame with face-attention status and pose angles."""
         self._frame_counter += 1
         now = time.monotonic()
+        # Both conditions must be true: frame-count gate prevents running on back-to-back
+        # frames, and the time gate prevents stalling on very low frame-rate feeds.
         due_by_frame = self._frame_counter % self.frame_skip == 0
         due_by_time = (now - self._last_detection_ts) >= self.detection_interval_seconds
 
@@ -260,6 +268,8 @@ class gazeTracker:
         data["roll_deg"] = roll
 
         # Direction labels retained to avoid breaking older consumers.
+        # ±8° yaw and ±7° pitch dead-zones prevent rapid label flicker when the
+        # user's gaze is hovering near the center boundary.
         if yaw < -8:
             data["gaze_state_horizontal"] = "left"
         elif yaw > 8:
@@ -275,12 +285,15 @@ class gazeTracker:
             data["gaze_state_vertical"] = "center"
 
         if self.calibrated_bounds is not None:
+            # Use asymmetric user-specific bounds recorded during corner calibration.
+            # These allow for postures where the user naturally sits off-center.
             facing = (
                 self.calibrated_bounds["yaw_min"] <= yaw <= self.calibrated_bounds["yaw_max"]
                 and self.calibrated_bounds["pitch_min"] <= pitch <= self.calibrated_bounds["pitch_max"]
                 and abs(roll) <= self.calibrated_bounds["roll_threshold_deg"]
             )
         else:
+            # Symmetric fallback thresholds used when no calibration profile exists.
             facing = (
                 abs(yaw) <= self.yaw_threshold_deg
                 and abs(pitch) <= self.pitch_threshold_deg
@@ -294,36 +307,45 @@ class gazeTracker:
         """Estimate pitch/yaw/roll from a sparse set of facial landmarks."""
         h, w = frame.shape[:2]
 
+        # Six facial landmark indices chosen to span the face robustly:
+        # nose tip (1), chin (152), left/right eye corners (33, 263),
+        # left/right mouth corners (61, 291).  Multiplying by frame dimensions
+        # converts MediaPipe's normalised [0, 1] coordinates into pixel coords.
         image_points = np.array(
             [
-                (landmarks[1].x * w, landmarks[1].y * h),
-                (landmarks[152].x * w, landmarks[152].y * h),
-                (landmarks[33].x * w, landmarks[33].y * h),
-                (landmarks[263].x * w, landmarks[263].y * h),
-                (landmarks[61].x * w, landmarks[61].y * h),
-                (landmarks[291].x * w, landmarks[291].y * h),
+                (landmarks[1].x * w, landmarks[1].y * h),    # Nose tip
+                (landmarks[152].x * w, landmarks[152].y * h), # Chin
+                (landmarks[33].x * w, landmarks[33].y * h),   # Left eye outer corner
+                (landmarks[263].x * w, landmarks[263].y * h), # Right eye outer corner
+                (landmarks[61].x * w, landmarks[61].y * h),   # Left mouth corner
+                (landmarks[291].x * w, landmarks[291].y * h), # Right mouth corner
             ],
             dtype="double",
         )
 
+        # Generic 3-D face model in millimetres (approximate adult average).
+        # These are the real-world positions that correspond to the six landmarks
+        # above; solvePnP minimises reprojection error between them and image_points.
         model_points = np.array(
             [
-                (0.0, 0.0, 0.0),
-                (0.0, -63.6, -12.5),
-                (-43.3, 32.7, -26),
-                (43.3, 32.7, -26),
-                (-28.9, -28.9, -24),
-                (28.9, -28.9, -24),
+                (0.0, 0.0, 0.0),        # Nose tip — origin of the model coordinate system
+                (0.0, -63.6, -12.5),    # Chin
+                (-43.3, 32.7, -26),     # Left eye outer corner
+                (43.3, 32.7, -26),      # Right eye outer corner
+                (-28.9, -28.9, -24),    # Left mouth corner
+                (28.9, -28.9, -24),     # Right mouth corner
             ],
             dtype="double",
         )
 
+        # Approximate camera intrinsics: focal length = frame width is a common
+        # heuristic for webcams without a calibration file (assumes ~60° horizontal FOV).
         focal_length = w
-        center = (w / 2, h / 2)
+        center = (w / 2, h / 2)  # Principal point assumed at the image centre.
         camera_matrix = np.array(
             [[focal_length, 0, center[0]], [0, focal_length, center[1]], [0, 0, 1]], dtype="double"
         )
-        dist_coeffs = np.zeros((4, 1))
+        dist_coeffs = np.zeros((4, 1))  # Assume no lens distortion; good enough for webcams.
 
         success, rotation_vector, translation_vector = cv.solvePnP(
             model_points, image_points, camera_matrix, dist_coeffs
@@ -332,7 +354,10 @@ class gazeTracker:
             zero = np.zeros((3, 1), dtype="double")
             return 0.0, 0.0, 0.0, zero, zero, camera_matrix, dist_coeffs
 
+        # Convert the compact axis-angle rotation vector into a full 3×3 rotation matrix.
         rotation_matrix, _ = cv.Rodrigues(rotation_vector)
+        # Build the 3×4 projection matrix [R | t] so decomposeProjectionMatrix can
+        # extract Euler angles without requiring a separate decomposition library.
         pose_matrix = cv.hconcat((rotation_matrix, translation_vector))
         _, _, _, _, _, _, euler_angles = cv.decomposeProjectionMatrix(pose_matrix)
 
@@ -340,7 +365,8 @@ class gazeTracker:
         yaw = float(euler_angles[1][0])
         roll = float(euler_angles[2][0])
 
-        # Normalize to [-180, 180] for stable threshold comparisons.
+        # decomposeProjectionMatrix outputs angles in [0, 360); remap to [-180, 180]
+        # so threshold comparisons like abs(yaw) <= 18 work correctly near 0°.
         pitch = (pitch + 180) % 360 - 180
         yaw = (yaw + 180) % 360 - 180
         roll = (roll + 180) % 360 - 180
@@ -356,6 +382,8 @@ class gazeTracker:
         h, w = frame.shape[:2]
         nose = (int(landmarks[1].x * w), int(landmarks[1].y * h))
 
+        # Project three 100 mm unit vectors (X, Y, Z) into image space so we can
+        # draw them as colour-coded lines anchored at the nose tip.
         axis = np.float32([[100, 0, 0], [0, 100, 0], [0, 0, 100]])
         imgpts, _ = cv.projectPoints(axis, rotation_vector, translation_vector, camera_matrix, dist_coeffs)
 
@@ -363,6 +391,7 @@ class gazeTracker:
         y_axis = tuple(imgpts[1].ravel().astype(int))
         z_axis = tuple(imgpts[2].ravel().astype(int))
 
+        # BGR colour convention: red = X (yaw), green = Y (pitch), blue = Z (roll/depth).
         cv.line(frame, nose, x_axis, (0, 0, 255), 3)
         cv.line(frame, nose, y_axis, (0, 255, 0), 3)
         cv.line(frame, nose, z_axis, (255, 0, 0), 3)
