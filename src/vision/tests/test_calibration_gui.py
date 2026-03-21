@@ -1,7 +1,13 @@
 """
 Simple test GUI for phone calibration.
-Run with: uv run python src/vision/test_calibration_gui.py
+
+This module provides an interactive GUI for testing phone detection calibration.
+It is not suited for automated pytest testing due to its interactive nature.
+
+Run directly with:
+    python src/vision/tests/test_calibration_gui.py
 """
+import pytest
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
@@ -116,3 +122,11 @@ class CalibrationTestGUI:
 if __name__ == "__main__":
     app = CalibrationTestGUI()
     app.run()
+
+
+@pytest.mark.skip(reason="Interactive GUI test - requires manual interaction with Tkinter")
+def test_calibration_gui():
+    """Placeholder test: calibration GUI is interactive and not suitable for automation."""
+    # This test exists only to be discovered by pytest.
+    # It is marked as skipped because the GUI requires user interaction.
+    pass

@@ -10,13 +10,17 @@ Runs as a background loop feeding distraction events into `SessionManager`.
 ```
 src/vision/
 ├── camera.py                   # Main detection loop — YOLO + DINO + attention tracker, distraction logging
+├── menu.py                     # CLI startup menu: launch camera, phone calibration, gaze calibration
+├── detectors/
+│   ├── dino_detector.py            # Grounding DINO zero-shot phone detector (lazy-loads HuggingFace weights)
+│   ├── dino_calibration_widget.py  # PySide6 UI for the DINOv2 phone calibration flow
+│   └── phone_calibration.py        # Interactive per-user phone calibration (guide box + rotation phases + few-shot learning)
 ├── tests/
-│   ├── menu.py                 # CLI startup menu: launch camera, phone calibration, gaze calibration
-├── phone_calibration.py        # Interactive per-user phone calibration (guide box + rotation phases + few-shot learning)
+│   ├── conftest.py                 # Shared pytest fixtures for mock camera + SessionManager wiring
+│   ├── test_camera_distractions.py # Pytest integration tests for phone/look-away/left-desk logging
+│   ├── test_calibration_gui.py     # Interactive calibration GUI test (marked skipped in pytest)
+│   └── __init__.py
 ├── phone_few_shot_bundle.npz   # Persisted calibration output: appearance signatures + tuned thresholds
-├── dino_detector.py            # Grounding DINO zero-shot phone detector (lazy-loads HuggingFace weights)
-├── dino_calibration_widget.py  # PySide6 UI for the DINOv2 phone calibration flow
-├── test_calibration_gui.py     # Standalone test harness for the calibration GUI
 ├── Trackers/
 │   ├── attention_tracker.py    # MediaPipe head-pose tracker; outputs attention state (ATTENTIVE / AWAY)
 │   ├── gaze_calibration.py     # Corner-based gaze calibration — records yaw/pitch bounds per user
@@ -49,7 +53,7 @@ from camera import Camera
 cam = Camera(session_manager=my_session_manager)
 ```
 
-### `tests/menu.py`
+### `menu.py`
 CLI entry point for the vision subsystem. Options:
 - Launch camera loop
 - Run phone calibration
@@ -94,13 +98,40 @@ Corner-based gaze calibration. Asks the user to look at each screen corner, reco
 
 ```bash
 # From src/vision/
-python tests/menu.py
+python menu.py
 
 # Or directly:
 python camera.py   # runs calibration then opens the detection window
 ```
 
 Press `q` in the OpenCV window to quit.
+
+---
+
+## Test Isolation (Vision + Intelligence)
+
+The test setup now isolates test code from functional runtime code while preserving vision ↔ intelligence integration:
+
+- **Pytest-based test suite** — configured in `pyproject.toml` with test paths:
+    - `src/vision/tests`
+    - `src/intelligence/tests`
+- **Shared fixtures in `conftest.py`** create mock camera state and test-specific SessionManager instances.
+- **File-based test DBs** are used intentionally and cleaned up after each test run.
+- **Interactive GUI calibration test** is intentionally skipped in automated pytest runs.
+- **Direct-run support retained** for debugging (`python .../test_*.py`) with runtime import fallback comments in test files.
+
+### Test Commands
+
+```bash
+# Run all tests from project root
+python -m pytest -q
+
+# Run only vision tests
+python -m pytest src/vision/tests -v
+
+# Run only intelligence tests
+python -m pytest src/intelligence/tests -v
+```
 
 ---
 

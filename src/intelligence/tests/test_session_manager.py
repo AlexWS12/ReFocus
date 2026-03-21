@@ -1,330 +1,234 @@
 """
-Functional tests for SessionManager: session lifecycle, pause/resume,
-rewards calculation, user_stats updates, and guard checks.
+Pytest-based functional tests for SessionManager.
 
-Run from src/intelligence/:
-    python tests/test_session_manager.py
+Tests session lifecycle, pause/resume, rewards calculation,
+user_stats updates, and guard checks.
+
+Run with:
+    pytest src/intelligence/tests/test_session_manager.py -v
+
+Or directly:
+    python src/intelligence/tests/test_session_manager.py
 """
 
-import sys
-import os
+import pytest
 import time
+try:
+    from session_manager import SessionManager, SessionState, DistractionType, _calculate_level
+except ModuleNotFoundError:
+    import os
+    import sys
 
-# Add parent directory to path so we can import database and session_manager
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from database import Database
-from session_manager import SessionManager, SessionState, DistractionType, _calculate_level
-
-# Use a temporary DB file so tests don't pollute the real data.db
-TEST_DB = os.path.join(os.path.dirname(__file__), "test_data.db")
-
-passed = 0
-failed = 0
-
-
-def assert_eq(actual, expected, msg=""):
-    global passed, failed
-    if actual == expected:
-        passed += 1
-    else:
-        failed += 1
-        print(f"  FAIL: {msg} — expected {expected!r}, got {actual!r}")
+    # Allow direct execution (python src/intelligence/tests/test_session_manager.py)
+    # by resolving the sibling intelligence package at runtime.
+    _INTELLIGENCE_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+    if _INTELLIGENCE_DIR not in sys.path:
+        sys.path.insert(0, _INTELLIGENCE_DIR)
+    from session_manager import SessionManager, SessionState, DistractionType, _calculate_level
 
 
-def assert_true(condition, msg=""):
-    global passed, failed
-    if condition:
-        passed += 1
-    else:
-        failed += 1
-        print(f"  FAIL: {msg}")
 
+class TestSessionManagerLifecycle:
+    """Tests for basic session lifecycle operations."""
 
-def assert_raises(fn, msg=""):
-    """Verify that calling fn() raises an Exception."""
-    global passed, failed
-    try:
-        fn()
-        failed += 1
-        print(f"  FAIL: {msg} — expected exception, none raised")
-    except Exception:
-        passed += 1
+    def test_session_lifecycle(self, session_manager):
+        """Start → log distractions → end → report produces valid data."""
+        sm, db = session_manager
 
+        sm.start_session()
+        assert sm.session_state == SessionState.IN_PROGRESS
 
-def fresh_session_manager():
-    """Returns a SessionManager backed by the test DB."""
-    db = Database(db_path=TEST_DB)
-    sm = SessionManager()
-    # Point the session manager at the test DB connection
-    sm.db = db._get_connection()
-    return sm, db
+        sm.log_distraction(DistractionType.PHONE_DISTRACTION, 30)
+        sm.log_distraction(DistractionType.LOOK_AWAY_DISTRACTION, 10)
+        assert len(sm.distraction_events) == 2
 
+        sm.end_session()
+        assert sm.session_state == SessionState.ENDED
 
-def cleanup():
-    """Remove the test database file."""
-    if os.path.exists(TEST_DB):
-        os.remove(TEST_DB)
+        report = sm.session_report()
+        assert report["session_id"] is not None
+        assert report["score"] >= 0
+        assert report["points_earned"] >= 1
+        assert report["coins_earned"] >= 1
+        assert report["phone_distractions"] == 1
+        assert report["look_away_distractions"] == 1
 
+    def test_pause_resume(self, session_manager):
+        """Pause and resume transitions work correctly."""
+        sm, db = session_manager
 
-# ---------------------------------------------------------------------------
-# Tests
-# ---------------------------------------------------------------------------
+        sm.start_session()
+        sm.pause_session()
+        assert sm.session_state == SessionState.PAUSED
+        assert sm.pause_start_time is not None
 
-def test_session_lifecycle():
-    """Start → log distractions → end → report produces valid data."""
-    print("Test: session lifecycle")
-    sm, db = fresh_session_manager()
+        time.sleep(1)
+        sm.resume_session()
+        assert sm.session_state == SessionState.IN_PROGRESS
+        assert sm.pause_start_time is None
+        assert sm.total_pause_duration >= 1
 
-    sm.start_session()
-    assert_eq(sm.session_state, SessionState.IN_PROGRESS, "state after start")
+        sm.end_session()
 
-    sm.log_distraction(DistractionType.PHONE_DISTRACTION, 30)
-    sm.log_distraction(DistractionType.LOOK_AWAY_DISTRACTION, 10)
-    assert_eq(len(sm.distraction_events), 2, "distraction count in memory")
+    def test_end_while_paused(self, session_manager):
+        """Ending a session while paused closes the open pause segment."""
+        sm, db = session_manager
 
-    sm.end_session()
-    assert_eq(sm.session_state, SessionState.ENDED, "state after end")
+        sm.start_session()
+        sm.pause_session()
+        time.sleep(1)
+        sm.end_session()
 
-    report = sm.session_report()
-    assert_true(report["session_id"] is not None, "report has session_id")
-    assert_true(report["score"] >= 0, "score is non-negative")
-    assert_true(report["points_earned"] >= 1, "XP floor of 1")
-    assert_true(report["coins_earned"] >= 1, "coins floor of 1")
-    assert_eq(report["phone_distractions"], 1, "phone distraction count")
-    assert_eq(report["look_away_distractions"], 1, "look-away distraction count")
+        report = sm.session_report()
+        # Duration should be ~0 because the entire session was paused
+        assert report["duration"] <= 1
 
-    db.close()
-    cleanup()
+    def test_multiple_pause_cycles(self, session_manager):
+        """Multiple pause/resume cycles accumulate correctly."""
+        sm, db = session_manager
 
+        sm.start_session()
+        for _ in range(3):
+            sm.pause_session()
+            time.sleep(1)
+            sm.resume_session()
 
-def test_pause_resume():
-    """Pause and resume transitions work correctly."""
-    print("Test: pause/resume")
-    sm, db = fresh_session_manager()
+        assert sm.total_pause_duration >= 3
+        sm.end_session()
 
-    sm.start_session()
-    sm.pause_session()
-    assert_eq(sm.session_state, SessionState.PAUSED, "state after pause")
-    assert_true(sm.pause_start_time is not None, "pause_start_time set")
+    def test_reset(self, session_manager):
+        """Reset clears all state including pause tracking."""
+        sm, db = session_manager
 
-    time.sleep(1)
-    sm.resume_session()
-    assert_eq(sm.session_state, SessionState.IN_PROGRESS, "state after resume")
-    assert_true(sm.pause_start_time is None, "pause_start_time cleared")
-    assert_true(sm.total_pause_duration >= 1, "pause duration accumulated")
-
-    sm.end_session()
-    db.close()
-    cleanup()
-
-
-def test_end_while_paused():
-    """Ending a session while paused closes the open pause segment."""
-    print("Test: end while paused")
-    sm, db = fresh_session_manager()
-
-    sm.start_session()
-    sm.pause_session()
-    time.sleep(1)
-    sm.end_session()
-
-    report = sm.session_report()
-    # Duration should be ~0 because the entire session was paused
-    assert_true(report["duration"] <= 1, "duration near 0 when fully paused")
-
-    db.close()
-    cleanup()
-
-
-def test_multiple_pause_cycles():
-    """Multiple pause/resume cycles accumulate correctly."""
-    print("Test: multiple pause cycles")
-    sm, db = fresh_session_manager()
-
-    sm.start_session()
-    for _ in range(3):
+        sm.start_session()
         sm.pause_session()
         time.sleep(1)
         sm.resume_session()
+        sm.log_distraction(DistractionType.IDLE_DISTRACTION, 5)
+        sm.end_session()
 
-    assert_true(sm.total_pause_duration >= 3, "3 pause cycles accumulated")
-    sm.end_session()
+        sm.reset()
+        assert sm.session_state == SessionState.READY
+        assert sm.total_pause_duration == 0
+        assert sm.pause_start_time is None
+        assert sm.distraction_events == []
+        assert sm.current_session_id is None
 
-    db.close()
-    cleanup()
-
-
-def test_rewards_calculation():
-    """Rewards scale with score and duration."""
-    print("Test: rewards calculation")
-    sm, db = fresh_session_manager()
-
-    # Test the formula directly: score=80, duration=4500s (75 min)
-    points, coins = sm._calculate_rewards(80, 4500)
-    # Expected: 80 * 75 * 0.0175 = 105, 80 * 75 * 0.004 = 24
-    assert_eq(points, 105, "XP for standard session")
-    assert_eq(coins, 24, "coins for standard session")
-
-    # Floor of 1 for tiny sessions
-    points_min, coins_min = sm._calculate_rewards(0, 0)
-    assert_eq(points_min, 1, "XP floor of 1")
-    assert_eq(coins_min, 1, "coins floor of 1")
-
-    db.close()
-    cleanup()
+        # Can start a new session after reset
+        sm.start_session()
+        assert sm.session_state == SessionState.IN_PROGRESS
+        sm.end_session()
 
 
-def test_user_stats_update():
-    """user_stats row is updated after each session ends."""
-    print("Test: user_stats update")
-    sm, db = fresh_session_manager()
+class TestRewardsAndStats:
+    """Tests for rewards calculation and user stats updates."""
 
-    # Check initial state
-    cursor = sm.db.cursor()
-    cursor.execute("SELECT total_sessions, exp, coins, level FROM user_stats WHERE id = 1")
-    before = cursor.fetchone()
-    assert_eq(before["total_sessions"], 0, "initial total_sessions")
-    assert_eq(before["exp"], 0, "initial exp")
+    def test_rewards_calculation(self, session_manager):
+        """Rewards scale with score and duration."""
+        sm, db = session_manager
 
-    sm.start_session()
-    sm.end_session()
+        # Test the formula directly: score=80, duration=4500s (75 min)
+        points, coins = sm._calculate_rewards(80, 4500)
+        # Expected: 80 * 75 * 0.0175 = 105, 80 * 75 * 0.004 = 24
+        assert points == 105
+        assert coins == 24
 
-    cursor.execute("SELECT total_sessions, exp, coins, level FROM user_stats WHERE id = 1")
-    after = cursor.fetchone()
-    assert_eq(after["total_sessions"], 1, "total_sessions incremented")
-    assert_true(after["exp"] >= 1, "exp increased")
-    assert_true(after["coins"] >= 1, "coins increased")
-    assert_true(after["level"] >= 1, "level at least 1")
+        # Floor of 1 for tiny sessions
+        points_min, coins_min = sm._calculate_rewards(0, 0)
+        assert points_min == 1
+        assert coins_min == 1
 
-    db.close()
-    cleanup()
+    def test_user_stats_update(self, session_manager):
+        """user_stats row is updated after each session ends."""
+        sm, db = session_manager
 
+        # Check initial state
+        cursor = sm.db.cursor()
+        cursor.execute("SELECT total_sessions, exp, coins, level FROM user_stats WHERE id = 1")
+        before = cursor.fetchone()
+        assert before["total_sessions"] == 0
+        assert before["exp"] == 0
 
-def test_calculate_level():
-    """Level formula: ceil(exp / 110), floor of 1."""
-    print("Test: calculate level")
-    assert_eq(_calculate_level(0), 1, "level at 0 XP")
-    assert_eq(_calculate_level(-10), 1, "level at negative XP")
-    assert_eq(_calculate_level(110), 1, "level at 110 XP")
-    assert_eq(_calculate_level(111), 2, "level at 111 XP")
-    assert_eq(_calculate_level(770), 7, "level at 770 XP (mock data)")
-    assert_eq(_calculate_level(1100), 10, "level at 1100 XP")
+        sm.start_session()
+        sm.end_session()
 
+        cursor.execute("SELECT total_sessions, exp, coins, level FROM user_stats WHERE id = 1")
+        after = cursor.fetchone()
+        assert after["total_sessions"] == 1
+        assert after["exp"] >= 1
+        assert after["coins"] >= 1
+        assert after["level"] >= 1
 
-def test_guard_checks():
-    """Invalid state transitions raise exceptions."""
-    print("Test: guard checks")
-    sm, db = fresh_session_manager()
-
-    # Can't pause/resume from READY
-    assert_raises(lambda: sm.pause_session(), "pause from READY")
-    assert_raises(lambda: sm.resume_session(), "resume from READY")
-
-    sm.start_session()
-
-    # Can't resume from IN_PROGRESS
-    assert_raises(lambda: sm.resume_session(), "resume from IN_PROGRESS")
-
-    sm.pause_session()
-
-    # Can't log distractions while PAUSED
-    assert_raises(
-        lambda: sm.log_distraction(DistractionType.PHONE_DISTRACTION, 5),
-        "log distraction while PAUSED"
-    )
-
-    # Can't pause while already PAUSED
-    assert_raises(lambda: sm.pause_session(), "pause from PAUSED")
-
-    sm.end_session()
-
-    # Can't end an already-ended session
-    assert_raises(lambda: sm.end_session(), "end from ENDED")
-
-    db.close()
-    cleanup()
+    def test_calculate_level(self):
+        """Level formula: ceil(exp / 110), floor of 1."""
+        assert _calculate_level(0) == 1
+        assert _calculate_level(-10) == 1
+        assert _calculate_level(110) == 1
+        assert _calculate_level(111) == 2
+        assert _calculate_level(770) == 7
+        assert _calculate_level(1100) == 10
 
 
-def test_reset():
-    """Reset clears all state including pause tracking."""
-    print("Test: reset")
-    sm, db = fresh_session_manager()
+class TestScoreCalculation:
+    """Tests for score calculation logic."""
 
-    sm.start_session()
-    sm.pause_session()
-    time.sleep(1)
-    sm.resume_session()
-    sm.log_distraction(DistractionType.IDLE_DISTRACTION, 5)
-    sm.end_session()
+    def test_score_calculation(self, session_manager):
+        """Score formula: 100 - penalty + duration_bonus, clamped to 0-100."""
+        sm, db = session_manager
 
-    sm.reset()
-    assert_eq(sm.session_state, SessionState.READY, "state after reset")
-    assert_eq(sm.total_pause_duration, 0, "pause duration cleared")
-    assert_eq(sm.pause_start_time, None, "pause_start_time cleared")
-    assert_eq(sm.distraction_events, [], "distraction_events cleared")
-    assert_eq(sm.current_session_id, None, "session_id cleared")
+        # Perfect session (no distractions, 60 min) → 100 + 7 bonus, clamped to 100
+        score = sm.calculate_score(3600, {})
+        assert score == 100
 
-    # Can start a new session after reset
-    sm.start_session()
-    assert_eq(sm.session_state, SessionState.IN_PROGRESS, "new session after reset")
-    sm.end_session()
+        # Zero duration → 0
+        score = sm.calculate_score(0, {})
+        assert score == 0
 
-    db.close()
-    cleanup()
+        # Heavy distractions should reduce score significantly
+        heavy = {
+            DistractionType.PHONE_DISTRACTION: {"count": 10, "time": 1800}
+        }
+        score = sm.calculate_score(3600, heavy)
+        assert score < 70
 
 
-def test_score_calculation():
-    """Score formula: 100 - penalty + duration_bonus, clamped to 0-100."""
-    print("Test: score calculation")
-    sm, db = fresh_session_manager()
+class TestGuardChecks:
+    """Tests for invalid state transitions and guard checks."""
 
-    # Perfect session (no distractions, 60 min) → 100 + 7 bonus, clamped to 100
-    score = sm.calculate_score(3600, {})
-    assert_eq(score, 100, "perfect 60-min session")
+    def test_invalid_state_transitions(self, session_manager):
+        """Invalid state transitions raise exceptions."""
+        sm, db = session_manager
 
-    # Zero duration → 0
-    score = sm.calculate_score(0, {})
-    assert_eq(score, 0, "zero duration")
+        # Can't pause/resume from READY
+        with pytest.raises(Exception):
+            sm.pause_session()
 
-    # Heavy distractions should reduce score significantly
-    # 10 phone events (penalty: 10*2*1.0=20) + 50% time ratio (0.5*50*1.0=25)
-    # Total penalty=45, bonus=7, score=62 — well below the perfect 100
-    heavy = {
-        DistractionType.PHONE_DISTRACTION: {"count": 10, "time": 1800}
-    }
-    score = sm.calculate_score(3600, heavy)
-    assert_true(score < 70, "heavy phone distractions reduce score below 70")
+        with pytest.raises(Exception):
+            sm.resume_session()
 
-    db.close()
-    cleanup()
+        sm.start_session()
 
+        # Can't resume from IN_PROGRESS
+        with pytest.raises(Exception):
+            sm.resume_session()
 
-# ---------------------------------------------------------------------------
-# Runner
-# ---------------------------------------------------------------------------
+        sm.pause_session()
+
+        # Can't log distractions while PAUSED
+        with pytest.raises(Exception):
+            sm.log_distraction(DistractionType.PHONE_DISTRACTION, 5)
+
+        # Can't pause while already PAUSED
+        with pytest.raises(Exception):
+            sm.pause_session()
+
+        sm.end_session()
+
+        # Can't end an already-ended session
+        with pytest.raises(Exception):
+            sm.end_session()
+
 
 if __name__ == "__main__":
-    # Clean up any leftover test DB before starting
-    cleanup()
-
-    test_session_lifecycle()
-    test_pause_resume()
-    test_end_while_paused()
-    test_multiple_pause_cycles()
-    test_rewards_calculation()
-    test_user_stats_update()
-    test_calculate_level()
-    test_guard_checks()
-    test_reset()
-    test_score_calculation()
-
-    # Final cleanup
-    cleanup()
-
-    print()
-    print(f"Results: {passed} passed, {failed} failed")
-    if failed > 0:
-        sys.exit(1)
-    else:
-        print("All tests passed!")
+    # Keep a direct-run entrypoint for local debugging while using pytest as the source of truth.
+    pytest.main([__file__, "-v"])

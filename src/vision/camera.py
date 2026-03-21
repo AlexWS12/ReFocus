@@ -59,6 +59,7 @@ class Camera:
         # into many.  Duration is measured start → last_seen (not start → now).
         self._session_manager = session_manager
         self._DISTRACTION_COOLDOWN = 5.0  # seconds of absence before an event is finalized and logged
+        self._LEFT_DESK_TRANSITION_SECONDS = 10.0  # promote no-face look-away to left-desk after continuous absence
         self._phone_distraction_start: float | None = None  # wall-clock time the current phone event opened
         self._phone_last_seen: float | None = None          # last frame where a phone was accepted; cooldown ticks from here
         self._look_away_distraction_start: float | None = None  # wall-clock time the current look-away event opened
@@ -364,7 +365,44 @@ class Camera:
         phone_detected_for_tracking = best_coords is not None and not best_is_fallback
         self._update_distraction_tracking(phone_detected_for_tracking)
 
+        # --- Attention UI state (3-state: ATTENTIVE / LOOK_AWAY / LEFT_DESK) ---
+        # We draw this in camera.py (instead of attention_tracker.py) because LEFT_DESK
+        # depends on distraction-transition timing managed here.
+        attention_data = self.eye_tracker._cached_data
+        ui_state, ui_color = self._get_attention_ui_state(attention_data)
+        cv.putText(
+            annotated,
+            f"Attention: {ui_state}",
+            (30, 135),
+            cv.FONT_HERSHEY_SIMPLEX,
+            0.65,
+            ui_color,
+            2,
+        )
+
         return frame, annotated
+
+    def _get_attention_ui_state(self, attention_data: dict) -> tuple[str, tuple[int, int, int]]:
+        """Return a user-facing 3-state attention label for the on-frame overlay.
+
+        States:
+        - ATTENTIVE: face present and facing screen.
+        - LOOK_AWAY: face not facing screen, or no-face interval shorter than transition threshold.
+        - LEFT_DESK: no-face interval promoted after ``_LEFT_DESK_TRANSITION_SECONDS``.
+        """
+        face_present = attention_data.get("face_present", True)
+        face_facing_screen = attention_data.get("face_facing_screen", True)
+
+        # Once transitioned, left-desk remains the visible state until finalized.
+        if self._left_desk_distraction_start is not None:
+            return "LEFT_DESK", (0, 0, 255)
+
+        if face_present and face_facing_screen:
+            return "ATTENTIVE", (0, 220, 0)
+
+        # While no face is present but threshold has not been reached yet,
+        # keep it as LOOK_AWAY to match the transition policy.
+        return "LOOK_AWAY", (0, 165, 255)
 
     def _update_distraction_tracking(self, phone_detected: bool) -> None:
         """Track distraction events with cooldown merging and priority suppression.
@@ -385,10 +423,10 @@ class Camera:
         now = time.time()
         attention_data = self.eye_tracker._cached_data
         face_present = attention_data.get("face_present", True)
-        # Separate left-desk (no face in frame) from look-away (face present but not facing screen).
-        # Previously both resolved to looking_away=True because face_facing_screen is False in both
-        # cases, causing absent-user time to be logged under the wrong distraction type.
-        looking_away = face_present and not attention_data.get("face_facing_screen", True)
+        # Use a single "away" signal so no-face and face-not-facing share one timeline.
+        # If the no-face segment stays continuous long enough, we promote that same
+        # ongoing event from LOOK_AWAY to LEFT_DESK.
+        looking_away = not attention_data.get("face_facing_screen", True)
         left_desk = not face_present  # True when MediaPipe detects no face at all
 
         # --- Phone distraction (highest priority) ---
@@ -437,37 +475,43 @@ class Camera:
                 self._left_desk_last_seen = None
             return
 
-        # --- Left-desk distraction (face absent; user physically left desk) ---
+        # --- Left-desk as a transition from look-away ---
+        # Policy: no-face segments start as LOOK_AWAY. If absence remains continuous
+        # for _LEFT_DESK_TRANSITION_SECONDS, transition the same ongoing event to LEFT_DESK.
         if left_desk:
-            # If a look-away was open, discard it — user left the desk so the look-away
-            # is superseded by the more significant absence event.
-            if self._look_away_distraction_start is not None:
-                self._look_away_distraction_start = None
-                self._look_away_last_seen = None
+            # Maintain a shared away timeline while no face is present.
             if self._left_desk_distraction_start is None:
-                self._left_desk_distraction_start = now  # open event the first frame face is gone
-            self._left_desk_last_seen = now  # refresh every frame face stays absent so cooldown resets
+                if self._look_away_distraction_start is None:
+                    self._look_away_distraction_start = now
+                self._look_away_last_seen = now
+
+                # Promote to LEFT_DESK once continuous no-face duration crosses threshold.
+                if now - self._look_away_distraction_start >= self._LEFT_DESK_TRANSITION_SECONDS:
+                    self._left_desk_distraction_start = self._look_away_distraction_start
+                    self._left_desk_last_seen = now
+                    self._look_away_distraction_start = None
+                    self._look_away_last_seen = None
+            else:
+                # Already transitioned; keep extending the left-desk event.
+                self._left_desk_last_seen = now
         else:
-            # Face reappeared — the user is back; check if open left-desk event has cooled down.
+            # Face present again: finalize any open LEFT_DESK event after cooldown.
             if self._left_desk_distraction_start is not None:
                 if now - self._left_desk_last_seen >= self._DISTRACTION_COOLDOWN:
-                    # Same start→last_seen duration rule: don't count the cooldown wait as desk-leave time
                     duration = max(1, int(self._left_desk_last_seen - self._left_desk_distraction_start))
                     try:
                         self._session_manager.log_distraction(_DistractionType.LEFT_DESK_DISTRACTION, duration)
                     except Exception:
-                        pass  # Session may not be IN_PROGRESS; never crash the camera loop
+                        pass
                     self._left_desk_distraction_start = None
                     self._left_desk_last_seen = None
 
-            # --- Look-away (only evaluated when face is present; left-desk takes priority above) ---
+            # Normal look-away tracking (face present but not facing screen).
             if looking_away:
                 if self._look_away_distraction_start is None:
-                    self._look_away_distraction_start = now  # open a new look-away event
-                self._look_away_last_seen = now  # refresh so brief returns to screen don't close the event
+                    self._look_away_distraction_start = now
+                self._look_away_last_seen = now
             elif self._look_away_distraction_start is not None:
-                # User is back on screen — wait out the cooldown before finalizing,
-                # same rationale as phone: prevents brief glances from splitting events.
                 if now - self._look_away_last_seen >= self._DISTRACTION_COOLDOWN:
                     duration = max(1, int(self._look_away_last_seen - self._look_away_distraction_start))
                     try:

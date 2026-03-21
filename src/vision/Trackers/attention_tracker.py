@@ -202,14 +202,11 @@ class gazeTracker:
 
         data = self._cached_data
 
-        status = "ATTENTIVE" if data["face_facing_screen"] else "AWAY"
-        color = (0, 220, 0) if data["face_facing_screen"] else (0, 0, 255)
-
-        if not data["face_present"]:
-            status = "NO FACE"
-            color = (0, 165, 255)
-
-        cv.putText(frame, f"Face: {status}", (30, 40), cv.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
+        # Keep this tracker overlay neutral so camera.py is the single source
+        # of truth for ATTENTIVE / LOOK_AWAY / LEFT_DESK attention messaging.
+        face_status = "YES" if data["face_present"] else "NO"
+        face_color = (0, 220, 0) if data["face_present"] else (0, 165, 255)
+        cv.putText(frame, f"Face Present: {face_status}", (30, 40), cv.FONT_HERSHEY_SIMPLEX, 0.9, face_color, 2)
         cv.putText(
             frame,
             f"Yaw:{data['yaw_deg']:.1f}  Pitch:{data['pitch_deg']:.1f}  Roll:{data['roll_deg']:.1f}",

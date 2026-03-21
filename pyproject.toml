@@ -18,6 +18,14 @@ dependencies = [
     "ultralytics>=8.3", #YOLO V11
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["src/intelligence/tests", "src/vision/tests"]
+pythonpath = ["src/intelligence", "src/vision"]
+addopts = "-v"
+
 [tool.uv]
 # Restricts dependency resolution to only these platforms.
 # This is needed because mediapipe only provides pre-built wheels for
