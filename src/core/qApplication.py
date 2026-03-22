@@ -4,6 +4,7 @@ from PySide6.QtCore import QTimer
 from src.experience.main_window import MainWindow
 from src.experience.pet_window import petWindow
 from src.core.database_reader import DatabaseReader
+from src.core.vision_manager import VisionManager
 
 from pathlib import Path
 
@@ -12,18 +13,20 @@ class QApplication(QApplication):
         super().__init__()
 
         # Load global stylesheet
-        style_path = Path(__file__).resolve().parent.parent / "experience" / "style" / "theme.qss"
-        if style_path.exists():
-            self.setStyleSheet(style_path.read_text())
+        self.load_stylesheet("light.qss")
+        self.style_path = "light.qss"
+
 
         # initialize stats reader
         self.database_reader = DatabaseReader()
+        self.vision_manager = VisionManager(self)
 
         self.main_window = MainWindow()
         self.main_window.show()
 
         self.open_pet_window()
         QTimer.singleShot(0, self.position_pet_window)
+        self.aboutToQuit.connect(self.vision_manager.stop)
 
     def run(self):
         self.exec()
@@ -44,3 +47,10 @@ class QApplication(QApplication):
         x = rect.right() - pw - margin
         y = rect.bottom() - ph - margin
         self.pet_window.move(x, y)
+
+    def load_stylesheet(self, theme: str):
+        style_path = (
+            Path(__file__).resolve().parent.parent / "experience" / "style" / theme
+        )
+        if style_path.exists():
+            self.setStyleSheet(style_path.read_text())

@@ -10,4 +10,6 @@ class LifetimeFocus(QWidget):
         self.setLayout(self.layout)
 
         self.layout.addWidget(CenteredLabel("Lifetime Focus"))
-        self.layout.addWidget(CenteredLabel(f"{parent.data['session_analytics']['lifetime_focus_seconds']} seconds"))
+        self.layout.addWidget(
+            CenteredLabel(f"{parent.data['session_analytics']['lifetime_focus_seconds']} seconds", secondary=True)
+        )

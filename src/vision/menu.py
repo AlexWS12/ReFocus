@@ -5,7 +5,15 @@ import os
 from rich.console import Console
 from rich.panel import Panel
 import questionary
-import msvcrt
+import sys
+
+if sys.platform == "win32":
+    import msvcrt
+else:
+    msvcrt = None
+
+
+
 
 
 def _import_symbol(primary_module: str, fallback_module: str, symbol: str):
@@ -98,8 +106,9 @@ def main() -> None:
 
         # Drain any keys that were pressed while the previous option was running so
         # they don't immediately fire the next questionary prompt.
-        while msvcrt.kbhit():
-            msvcrt.getch()
+        if msvcrt:
+            while msvcrt.kbhit():
+             msvcrt.getch()
 
         choice = questionary.select(
             "Choose an option:",

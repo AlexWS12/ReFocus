@@ -10,4 +10,6 @@ class LongestFocus(QWidget):
         self.setLayout(self.layout)
 
         self.layout.addWidget(CenteredLabel("Longest Focus"))
-        self.layout.addWidget(CenteredLabel(f"{parent.data['session_analytics']['longest_focus_seconds']} seconds"))
+        self.layout.addWidget(
+            CenteredLabel(f"{parent.data['session_analytics']['longest_focus_seconds']} seconds", secondary=True)
+        )

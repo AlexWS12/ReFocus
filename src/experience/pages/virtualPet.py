@@ -6,6 +6,7 @@ from src.experience.widgets.centered_label import CenteredLabel
 class VirtualPet(QWidget):
     def __init__(self, parent: None):
         super().__init__(parent)
+        self.setObjectName("pageRoot")
 
         # layout for the virtual pet
         self.layout = QVBoxLayout()
