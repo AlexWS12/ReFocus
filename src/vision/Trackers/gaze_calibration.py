@@ -3,7 +3,7 @@ import mediapipe as mp
 import numpy as np
 import time
 
-from src.vision.Trackers.attention_tracker import gazeTracker
+from .attention_tracker import gazeTracker  # relative import: both files are in the trackers package
 
 
 class GazeCalibrator:
@@ -56,7 +56,7 @@ class GazeCalibrator:
 
         target_index = 0
         last_detection_ts = 0.0
-        detection_interval = 0.12
+        detection_interval = 0.12  # Sample at ~8 Hz; faster than this yields highly correlated samples.
 
         while target_index < len(targets):
             ok, frame = cap.read()
@@ -137,6 +137,8 @@ class GazeCalibrator:
                 bucket["roll"].clear()
 
             auto_complete = len(bucket["yaw"]) >= self.samples_per_target
+            # Allow early advance only when at least 1/3 of the target samples are collected
+            # (minimum 6) so the user cannot skip a target before any useful data is gathered.
             manual_next = key == ord("n") and len(bucket["yaw"]) >= max(6, self.samples_per_target // 3)
             if auto_complete or manual_next:
                 target_index += 1
@@ -173,6 +175,9 @@ class GazeCalibrator:
         yaw_max = float(max(corrected_yaw) + margin_deg)
         pitch_min = float(min(corrected_pitch) - margin_deg)
         pitch_max = float(max(corrected_pitch) + margin_deg)
+        # Roll threshold: 95th percentile of absolute corrected roll across all targets,
+        # plus a 3° buffer, with a hard floor of 12° to avoid false "away" on minor tilts.
+        # Using the 95th percentile instead of the max suppresses occasional pose spikes.
         roll_threshold = float(max(12.0, np.percentile(np.abs(np.array(corrected_roll, dtype=np.float64)), 95) + 3.0))
 
         # [INTELLIGENCE TEAM] The profile dict is the calibration contract between

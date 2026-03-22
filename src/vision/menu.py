@@ -3,10 +3,19 @@ import cv2 as cv
 from rich.console import Console
 from rich.panel import Panel
 import questionary
+import sys
 
-from src.vision.camera import Camera
-from src.vision.phone_calibration import PhoneCalibration
-from src.vision.Trackers.gaze_calibration import GazeCalibrator
+if sys.platform == "win32":
+    import msvcrt
+else:
+    msvcrt = None
+
+
+
+
+from camera import Camera
+from detectors.phone_calibration import PhoneCalibration
+from Trackers.gaze_calibration import GazeCalibrator
 
 
 console = Console()
@@ -22,8 +31,9 @@ def launch_camera() -> None:
             data = cam.read_frame()
             if data is None:
                 break
-            _, annotated = data
+            _, annotated = data  # data is (raw_frame, annotated_frame); we only need the overlay
             cv.imshow("StudyWidget Vision", annotated)
+            # waitKey(1) keeps the event loop alive; 0xFF mask strips platform-specific high bits
             if cv.waitKey(1) & 0xFF == ord("q"):
                 break
     finally:
@@ -45,7 +55,7 @@ def calibrate_gaze_center() -> None:
     if result.get("success"):
         console.print(
             "[green]Gaze center saved[/green] "
-            f"(yaw={result['yaw_deg']:.2f}, pitch={result['pitch_deg']:.2f}, roll={result['roll_deg']:.2f})"
+            f"(yaw={result['yaw_center_deg']:.2f}, pitch={result['pitch_center_deg']:.2f}, roll={result['roll_center_deg']:.2f})"
         )
     else:
         console.print(f"[yellow]Gaze calibration did not complete:[/yellow] {result}")
@@ -61,6 +71,12 @@ def main() -> None:
             )
         )
 
+        # Drain any keys that were pressed while the previous option was running so
+        # they don't immediately fire the next questionary prompt.
+        if msvcrt:
+            while msvcrt.kbhit():
+             msvcrt.getch()
+
         choice = questionary.select(
             "Choose an option:",
             choices=[
@@ -71,6 +87,7 @@ def main() -> None:
             ],
         ).ask()
 
+        # choice is None when the user hits Ctrl-C inside questionary.
         if choice is None or choice.startswith("4"):
             console.print("[cyan]Exiting vision menu.[/cyan]")
             break

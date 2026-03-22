@@ -1,5 +1,4 @@
 import cv2
-import math
 import numpy as np
 import os
 import time
@@ -11,8 +10,9 @@ class PhoneCalibration:
 
     def __init__(self, model_path: str = "yolo26n.pt"):
         self.model = YOLO(model_path)  # Load the base detector once and reuse it for all calibration steps.
-        self.animations_dir = os.path.join(os.path.dirname(__file__), "assets", "animations")
-        self.few_shot_bundle_path = os.path.join(os.path.dirname(__file__), "phone_few_shot_bundle.npz")
+        # __file__ is now detectors/phone_calibration.py; go up one level to reach the vision root
+        self.animations_dir = os.path.join(os.path.dirname(__file__), "..", "assets", "animations")
+        self.few_shot_bundle_path = os.path.join(os.path.dirname(__file__), "..", "phone_few_shot_bundle.npz")
         self._animation_frames_cache = {}  # Stores per-direction rendered frame sequences.
         # [INTELLIGENCE TEAM] calibration_data is the primary output of the calibration process.
         # get_optimal_params() packages these values into runtime detection settings for the
@@ -23,11 +23,11 @@ class PhoneCalibration:
             "optimal_conf_threshold": 0.5,  # Default fallback until calibration computes a better threshold.
             "detections_count": 0,  # Number of accepted samples collected during calibration.
             "few_shot_samples": 0,  # Number of appearance exemplars captured during steady phase.
-            "few_shot_similarity_threshold": 0.45,  # Global fallback similarity gate.
+            "few_shot_similarity_threshold": 0.30,  # Global fallback similarity gate.
             "few_shot_similarity_thresholds": {
-                "steady": 0.45,
-                "right_rotation": 0.42,
-                "left_rotation": 0.42,
+                "steady": 0.30,
+                "right_rotation": 0.27,
+                "left_rotation": 0.27,
             },
             "lighting_quality": "unknown",  # Qualitative label derived from average confidence.
             "calibrated": False,  # Flips to True only after enough usable samples are collected.
@@ -36,7 +36,9 @@ class PhoneCalibration:
     @staticmethod
     def get_few_shot_bundle_path() -> str:
         """Return the persisted few-shot bundle path shared by calibrator and runtime camera."""
-        return os.path.join(os.path.dirname(__file__), "phone_few_shot_bundle.npz")
+        # Bundle lives at the vision root (one level up from detectors/) so calibrator
+        # and camera.py both resolve to the same shared file.
+        return os.path.join(os.path.dirname(__file__), "..", "phone_few_shot_bundle.npz")
 
     def _load_rotation_frames(self, direction: str) -> list:
         """Load and cache frames from the GIF rotation guide for this direction."""
@@ -118,8 +120,9 @@ class PhoneCalibration:
         cv2.addWeighted(overlay, 0.55, frame, 0.45, 0, frame)
         cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 200, 255), 2)
 
-        title = "RIGHT ROTATION PREVIEW" if direction == "right" else "LEFT ROTATION PREVIEW"
-        cv2.putText(frame, title, (x1 + 8, y1 + 22), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 200, 255), 1)
+        title = "ROTATE RIGHT" if direction == "right" else "ROTATE LEFT"
+        cv2.putText(frame, title, (x1 + 8, y1 + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 200, 255), 1)
+        cv2.putText(frame, "(your view, not camera)", (x1 + 8, y1 + 30), cv2.FONT_HERSHEY_SIMPLEX, 0.33, (160, 160, 160), 1)
 
         if preview is not None and (y1 + 32 + preview.shape[0]) <= y2:
             py1 = y1 + 32
@@ -157,7 +160,7 @@ class PhoneCalibration:
                     cv2.FONT_HERSHEY_SIMPLEX, 0.65, color, 2)
         return x1, y1, x2, y2
 
-    def _find_phone_in_box(self, frame, conf=0.2):
+    def _find_phone_in_box(self, frame, conf=0.15):
         """Return the strongest phone detection and whether it is centered in the guide box."""
         results = self.model(frame, classes=[67], conf=conf, verbose=False)  # Class 67 is COCO's cell phone label.
         boxes = results[0].boxes  # YOLO returns all detections for the frame here.
@@ -254,7 +257,7 @@ class PhoneCalibration:
         # bank yields a higher inter-exemplar median and therefore a tighter gate.
         # A diverse bank (many viewpoints) returns a looser gate to stay inclusive.
         if len(exemplars) < 3:
-            return 0.45
+            return 0.30
         sims = []
         for i in range(len(exemplars)):
             for j in range(i + 1, len(exemplars)):
@@ -262,7 +265,7 @@ class PhoneCalibration:
         if not sims:
             return 0.45
         # Margin below median keeps the gate tolerant to moderate rotation/lighting shifts.
-        return float(np.clip(np.median(sims) - 0.15, 0.35, 0.85))
+        return float(np.clip(np.median(sims) - 0.05, 0.25, 0.85))
 
     def _add_signature_if_novel(self, bank: list, signature: np.ndarray, max_count: int = 14) -> bool:
         """Append signature only if it adds view diversity to the bank."""
@@ -338,65 +341,9 @@ class PhoneCalibration:
         # Accept if the phone clearly looks edge-on plus directional movement.
         return (narrow_enough or area_reduced) and drift_ok
 
-    def _draw_rotation_arrow(self, frame, direction: str, guide_box: tuple):
-        """Draw a smooth anti-aliased arc arrow using Pillow."""
-        # [UX/UI TEAM] The arc and arrowhead are drawn with Pillow for anti-aliasing;
-        # the direction label is then added via cv2, which renders small fonts more
-        # crisply than PIL at typical calibration window sizes.
-        from PIL import Image, ImageDraw
-        h, w = frame.shape[:2]
-        gx1, gy1, gx2, gy2 = guide_box
-        guide_cy = (gy1 + gy2) // 2
-        R = 52
-        color_rgb = (255, 200, 0)   # warm yellow — RGB for PIL
-        color_bgr = (0, 200, 255)   # same color — BGR for cv2 label text
-
-        # Convert BGR frame to RGB PIL image so Pillow can draw anti-aliased shapes.
-        pil_img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-        draw = ImageDraw.Draw(pil_img)
-
-        if direction == "right":
-            cx = min(gx2 + R + 15, w - R - 5)  # place arc to the right of the guide box
-            arc_start, arc_end = 240, 120        # ¾ C opening left; PIL wraps clockwise past 360
-            tip_ang = math.radians(120)          # angle (screen-clockwise from 3-o'clock) of the arc endpoint
-            label = "ROTATE RIGHT"
-        else:
-            cx = max(gx1 - R - 15, R + 5)       # place arc to the left of the guide box
-            arc_start, arc_end = 60, 300         # ¾ C opening right
-            tip_ang = math.radians(300)
-            label = "ROTATE LEFT"
-
-        # Anti-aliased arc — cv2.ellipse does not support LINE_AA for thick arcs.
-        bbox = [cx - R, guide_cy - R, cx + R, guide_cy + R]
-        draw.arc(bbox, start=arc_start, end=arc_end, fill=color_rgb, width=5)
-
-        # Filled arrowhead triangle at the arc endpoint.
-        # Clockwise tangent vector in screen coords at angle θ: (-sin θ, cos θ).
-        tx, ty   = math.cos(tip_ang), math.sin(tip_ang)  # unit radius vector at tip
-        tant_x   = -ty                                    # clockwise tangent x = -sin(tip_ang)
-        tant_y   =  tx                                    # clockwise tangent y =  cos(tip_ang)
-        perp_x, perp_y = tant_y, -tant_x                 # perpendicular (radial direction) for base width
-
-        tip_x = cx + R * tx
-        tip_y = guide_cy + R * ty
-        arr = 14  # arrowhead length in pixels
-        apex   = (tip_x + arr * tant_x,           tip_y + arr * tant_y)
-        base_l = (tip_x + arr * 0.45 * perp_x,    tip_y + arr * 0.45 * perp_y)
-        base_r = (tip_x - arr * 0.45 * perp_x,    tip_y - arr * 0.45 * perp_y)
-        draw.polygon([apex, base_l, base_r], fill=color_rgb)
-
-        # Write Pillow changes back into the OpenCV BGR frame in-place.
-        frame[:] = cv2.cvtColor(np.asarray(pil_img), cv2.COLOR_RGB2BGR)
-
-        # Label via cv2 with LINE_AA — PIL's built-in font is too pixelated at small sizes.
-        label_x = cx - 55
-        label_y = min(guide_cy + R + 22, h - 8)
-        cv2.putText(frame, label, (label_x, label_y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_bgr, 2, cv2.LINE_AA)
-
-    def _wait_for_phone_in_box(self, cap, hold_seconds=1.5):
+    def _wait_for_phone_in_box(self, cap, hold_seconds=1.0):
         """Wait until the user places the phone in the guide box steadily."""
-        # [UX/UI TEAM] The 1.5 s hold requirement prevents an accidental pass through
+        # [UX/UI TEAM] The 1.0 s hold requirement prevents an accidental pass through
         # the box from triggering calibration. The on-screen countdown ("Hold steady: Xs")
         # gives the user explicit feedback on how long they need to hold.
         stable_since = None  # Timestamp marking when the phone first became valid and centered.
@@ -417,7 +364,7 @@ class PhoneCalibration:
             box = self._draw_guide_box(frame, active=stable_since is not None)
             guide_x1, guide_y1, guide_x2, guide_y2 = box
 
-            best_box, in_box, _ = self._find_phone_in_box(raw_frame, conf=0.2)  # Use low threshold during setup to avoid missing borderline poses.
+            best_box, in_box, _ = self._find_phone_in_box(raw_frame, conf=0.15)  # Use low threshold during setup to avoid missing borderline poses.
 
             cv2.putText(frame, "CALIBRATION READY", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 255, 255), 2)
@@ -459,6 +406,121 @@ class PhoneCalibration:
             cv2.imshow("Phone Calibration", frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 return {"error": "Calibration cancelled"}
+
+    def _capture_rotation_snapshot(
+        self,
+        cap,
+        current_frame,
+        phase_kind: str,
+        baseline: dict,
+        few_shot_banks: dict,
+        crop_banks: dict,
+        few_shot_thresholds: dict,
+        burst_count: int = 8,
+        burst_interval_ms: int = 80,
+    ) -> int:
+        """Capture a quick burst of frames when the user presses SPACE during a rotation phase.
+
+        Instead of relying on the continuous frame-by-frame validator to catch the
+        phone at just the right angle, this lets the user *intentionally* freeze at
+        the desired rotation and trigger a burst capture.  The burst uses a lower
+        YOLO confidence threshold and a more lenient rotation check so angled phones
+        with unusual cases are much more likely to be accepted.
+
+        Args:
+            cap: OpenCV VideoCapture already open.
+            current_frame: The live frame at the moment SPACE was pressed (included in burst).
+            phase_kind: ``"right_rotation"`` or ``"left_rotation"``.
+            baseline: Geometry baseline dict from the steady phase.
+            few_shot_banks / crop_banks / few_shot_thresholds: Mutated in place.
+            burst_count: Number of frames to capture.
+            burst_interval_ms: Delay between captures (ms).
+
+        Returns:
+            Number of valid frames collected (added to ``valid_frames`` in caller).
+        """
+        # Collect burst frames — first is the frame already on screen when SPACE hit.
+        burst_frames = [current_frame]
+        for _ in range(burst_count - 1):
+            ret, f = cap.read()
+            if ret:
+                burst_frames.append(f.copy())
+            cv2.waitKey(burst_interval_ms)
+
+        # Flash "Capturing…" so the user knows their press registered.
+        show = burst_frames[0].copy()
+        h_s, w_s = show.shape[:2]
+        cv2.putText(
+            show, "Capturing...", (w_s // 2 - 120, h_s // 2),
+            cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 2, cv2.LINE_AA,
+        )
+        cv2.imshow("Phone Calibration", show)
+        cv2.waitKey(1)
+
+        phase_exemplars = self._phase_exemplars(few_shot_banks, phase_kind)
+        phase_threshold = few_shot_thresholds.get(phase_kind, 0.42)
+        valid_count = 0
+
+        for bf in burst_frames:
+            # Lower threshold here so angled / unusual-case phones aren't missed.
+            best_box, in_box, _ = self._find_phone_in_box(bf, conf=0.15)
+            if best_box is None or not in_box:
+                continue
+
+            metrics = self._box_metrics(best_box, bf.shape)
+
+            # Relaxed rotation check: size/area reduction vs baseline is enough —
+            # we trust the user pressed SPACE at the right angle, so skip drift gating.
+            if baseline is not None:
+                size_ok = (
+                    metrics["width_norm"] <= baseline["width_norm"] * 0.85
+                    or metrics["area_ratio"] <= baseline["area_ratio"] * 0.85
+                )
+                if not size_ok:
+                    continue
+
+            # Appearance similarity — more lenient than the continuous path so
+            # partially-turned phones still enrich the exemplar bank.
+            if phase_exemplars:
+                crop = self._extract_phone_crop(bf, best_box)
+                sig = self._compute_few_shot_signature(crop)
+                score = self._few_shot_similarity(sig, phase_exemplars)
+                if score < max(0.22, phase_threshold - 0.18):
+                    continue
+
+            # Valid frame — add to exemplar bank if it adds new view diversity.
+            crop = self._extract_phone_crop(bf, best_box)
+            sig = self._compute_few_shot_signature(crop)
+            added = self._add_signature_if_novel(few_shot_banks[phase_kind], sig, max_count=12)
+            if added:
+                norm_crop = self._normalize_crop_for_bundle(crop)
+                if norm_crop is not None:
+                    crop_banks[phase_kind].append(norm_crop)
+            valid_count += 1
+
+        # Re-estimate threshold from the enriched bank.
+        bank = few_shot_banks[phase_kind]
+        if len(bank) >= 3:
+            updated = self._estimate_few_shot_threshold(bank)
+            few_shot_thresholds[phase_kind] = float(np.clip(updated - 0.03, 0.30, 0.82))
+
+        # Brief result overlay so the user knows whether the snapshot counted.
+        result_frame = burst_frames[-1].copy()
+        h_r, w_r = result_frame.shape[:2]
+        if valid_count >= 3:
+            msg = f"Snapshot OK — {valid_count}/{burst_count} frames valid"
+            color = (0, 255, 100)
+        else:
+            msg = f"Only {valid_count} valid — rotate farther and press SPACE again"
+            color = (0, 100, 255)
+        cv2.putText(
+            result_frame, msg, (20, h_r // 2),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.75, color, 2, cv2.LINE_AA,
+        )
+        cv2.imshow("Phone Calibration", result_frame)
+        cv2.waitKey(900)
+
+        return valid_count
 
     def _prompt_retry_or_quit(self, cap, phase_name: str) -> str:
         """
@@ -535,7 +597,7 @@ class PhoneCalibration:
             {
                 "name": "PHASE 1",
                 "instruction": "Hold phone steady in the box",
-                "required_valid_frames": 12,  # Lowered from 18 — fewer steady frames needed to baseline.
+                "required_valid_frames": 8,  # Lowered from 12 — fewer steady frames needed to baseline.
                 "max_seconds": 20,
                 "kind": "steady",
                 "collect": True,
@@ -543,7 +605,7 @@ class PhoneCalibration:
             {
                 "name": "PHASE 2",
                 "instruction": "Rotate phone RIGHT about 90 degrees",
-                "required_valid_frames": 7,  # Lowered from 10 — easier to hit with relaxed thresholds.
+                "required_valid_frames": 5,  # Lowered from 7 — easier to hit with relaxed thresholds.
                 "max_seconds": 25,
                 "kind": "right_rotation",
                 "collect": True,
@@ -551,7 +613,7 @@ class PhoneCalibration:
             {
                 "name": "PHASE 3",
                 "instruction": "Rotate phone LEFT about 90 degrees",
-                "required_valid_frames": 7,  # Lowered from 10.
+                "required_valid_frames": 5,  # Lowered from 7.
                 "max_seconds": 25,
                 "kind": "left_rotation",
                 "collect": True,
@@ -581,10 +643,9 @@ class PhoneCalibration:
                 cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
                 guide_box = self._draw_guide_box(frame)
 
-                # Draw directional arc arrow for rotation phases so the user knows which way to turn.
+                # Draw GIF rotation preview for rotation phases.
                 if phase["kind"] in ("right_rotation", "left_rotation"):
                     direction = "right" if phase["kind"] == "right_rotation" else "left"
-                    self._draw_rotation_arrow(frame, direction, guide_box)
                     phase_elapsed = time.time() - phase_start
                     self._draw_rotation_preview(frame, direction, phase_elapsed)
 
@@ -600,11 +661,15 @@ class PhoneCalibration:
                 # Main instruction
                 cv2.putText(frame, phase["instruction"], (10, 75),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                if rotation_phase:
+                    cv2.putText(frame, "Press SPACE to snapshot current angle",
+                                (10, 97), cv2.FONT_HERSHEY_SIMPLEX, 0.52,
+                                (140, 255, 180), 1, cv2.LINE_AA)
                 
                 # Run detection on the clean camera frame (not the UI-overlay frame).
                 raw_frame = frame.copy()
                 if phase["collect"]:
-                    best_box, in_box, _ = self._find_phone_in_box(raw_frame, conf=0.2)
+                    best_box, in_box, _ = self._find_phone_in_box(raw_frame, conf=0.15)
                     
                     if best_box is not None:
                         conf = float(best_box.conf[0])
@@ -749,10 +814,18 @@ class PhoneCalibration:
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
                 
                 cv2.imshow("Phone Calibration", frame)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord('q'):
                     cap.release()
                     cv2.destroyAllWindows()
                     return {"error": "Calibration cancelled"}
+                elif key == ord(' ') and rotation_phase and baseline is not None:
+                    # Snapshot capture: user manually triggers a burst at their chosen angle.
+                    snap_valid = self._capture_rotation_snapshot(
+                        cap, frame.copy(), phase["kind"], baseline,
+                        few_shot_banks, crop_banks, few_shot_thresholds,
+                    )
+                    valid_frames += snap_valid
 
                 # Move on only when validation requirements are met.
                 if valid_frames >= phase["required_valid_frames"]:

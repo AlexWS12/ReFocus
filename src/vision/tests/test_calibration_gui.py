@@ -5,7 +5,7 @@ Run with: uv run python src/vision/test_calibration_gui.py
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
-from src.vision.phone_calibration import PhoneCalibration
+from detectors.phone_calibration import PhoneCalibration
 
 
 class CalibrationTestGUI:

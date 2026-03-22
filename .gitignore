@@ -202,6 +202,7 @@ cython_debug/
 
 # Project-specific runtime files
 src/vision/Trackers/gaze_center_calibration.json
+src/vision/trackers/gaze_center_calibration.json
 #  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
 #  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
 #  refer to https://docs.cursor.com/context/ignore-files

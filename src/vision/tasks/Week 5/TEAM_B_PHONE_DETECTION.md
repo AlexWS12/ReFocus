@@ -22,6 +22,9 @@ Guide-box center checks reduce noise but can still pass false positives when:
 
 ## Week 5 Reliability Plan
 
+### Week 5 Progress (Completed)
+- [x] Fixed a false-positive issue where YOLO was tracking the phone 3D model instead of the real phone target.
+
 ### 1) Spatial Validity (Guide Box)
 - [ ] Replace center-in-box acceptance with overlap ratio gate
 - [ ] Compute overlap as intersection_area / detection_box_area

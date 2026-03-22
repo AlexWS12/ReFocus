@@ -1,0 +1,1 @@
+﻿"""Vision detector modules package."""

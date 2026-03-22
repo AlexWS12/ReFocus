@@ -19,6 +19,16 @@ Week 5 focus is quality assurance across the full attention + phone pipeline, wi
 - [ ] Ensure Team A and Team B smoothing choices do not conflict in responsiveness
 - [ ] Review threshold defaults before merge (confidence, overlap, few-shot, temporal)
 
+## Team Lead Work Completed in Week 5
+- [x] Researched phone-recognition robustness strategies and selected a hybrid detection approach (YOLO + Grounding DINO)
+- [x] Integrated Grounding DINO as supplemental/fallback detector to improve misses from box-only YOLO flow
+- [x] Switched YOLO detection path to `model.track(..., tracker="bytetrack.yaml", persist=True, verbose=False)` so ByteTrack runs every frame
+- [x] Added track-aware candidate handling using 7-field tuples: `(x1, y1, x2, y2, conf, source, track_id)`
+- [x] Captured ByteTrack IDs from `box.id` for YOLO candidates (`track_id=None` for DINO candidates)
+- [x] Added active-track continuity logic by lowering few-shot similarity threshold by `0.05` (floor `0.30`) when the track matches last confirmed phone
+- [x] Added per-frame active-track state update (`_active_track_id` reset when phone not detected)
+- [x] Updated runtime overlay to show source + track ID (example: `PHONE(YOLO #3) 87%  sim:0.71`)
+
 ## Integration Tasks
 
 ### 1) Unified Detection Contract
