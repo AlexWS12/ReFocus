@@ -1,7 +1,5 @@
 
-import cv2 as cv
 import importlib
-import os
 from rich.console import Console
 from rich.panel import Panel
 import questionary
@@ -12,16 +10,16 @@ if sys.platform == "win32":
 else:
     msvcrt = None
 
-
-
-
-
 def _import_symbol(primary_module: str, fallback_module: str, symbol: str):
     """Import symbol from project-root path first, then direct-run fallback path."""
-    try:
-        return getattr(importlib.import_module(primary_module), symbol)
-    except ModuleNotFoundError:
-        return getattr(importlib.import_module(fallback_module), symbol)
+    for module_path in (primary_module, fallback_module):
+        try:
+            return getattr(importlib.import_module(module_path), symbol)
+        except (ModuleNotFoundError, AttributeError):
+            continue
+    raise ImportError(
+        f"Cannot resolve {symbol} from {primary_module} or {fallback_module}"
+    )
 
 
 console = Console()
@@ -29,6 +27,9 @@ console = Console()
 
 def launch_camera() -> None:
     """Run the camera loop with phone and attention overlays."""
+    # OpenCV import is local so calibration-only menu usage stays lightweight.
+    import cv2 as cv
+
     # Camera and SessionManager are imported lazily so calibration paths do not
     # instantiate or even import camera-specific runtime dependencies.
     Camera = _import_symbol("src.vision.camera", "camera", "Camera")
@@ -108,7 +109,7 @@ def main() -> None:
         # they don't immediately fire the next questionary prompt.
         if msvcrt:
             while msvcrt.kbhit():
-             msvcrt.getch()
+                msvcrt.getch()
 
         choice = questionary.select(
             "Choose an option:",

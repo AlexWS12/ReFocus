@@ -3,6 +3,10 @@
 Real-time phone detection and head-pose attention tracking for StudyWidget.
 Runs as a background loop feeding distraction events into `SessionManager`.
 
+Vision is intentionally a lightweight helper subsystem for the main app: it
+focuses on capture/detection/calibration and delegates persistence/analytics to
+the intelligence layer.
+
 ---
 
 ## Folder Structure
@@ -48,6 +52,10 @@ Central detection loop. On every frame:
 6. **`_get_attention_ui_state`** renders a camera-owned 3-state label: `ATTENTIVE`, `LOOK_AWAY`, `LEFT_DESK`.
 
 Cross-package dependency on intelligence is resolved via lazy `importlib` fallback (`src.intelligence...` first, then flat module name), so there is no `sys.path` mutation in `camera.py`.
+
+`camera.py` and `menu.py` keep heavy imports lazy where possible (for example,
+calibration classes and OpenCV in menu launch paths) so importing helpers has
+minimal startup overhead.
 
 Accepts an optional `session_manager` argument:
 ```python
@@ -108,7 +116,7 @@ python -m src.vision.menu
 python menu.py
 
 # Or directly:
-python camera.py   # runs calibration then opens the detection window
+python camera.py   # opens detection window directly (no calibration auto-run)
 ```
 
 Press `q` in the OpenCV window to quit.
@@ -140,6 +148,10 @@ python -m pytest src/vision/tests -v
 # Run only intelligence tests
 python -m pytest src/intelligence/tests -v
 ```
+
+These focused helper tests validate the lightweight vision/intelligence seams,
+while broader full-suite pytest runs remain the source of truth for complete
+integration behavior.
 
 ---
 

@@ -1,12 +1,17 @@
 # camera.py
 # Main vision module that combines phone detection (YOLO) and eye tracking.
 
-from ultralytics import YOLO
 import cv2 as cv
 import importlib
 import numpy as np
 import os
 import time
+
+
+_gaze_tracker_cls = None
+_phone_calibration_cls = None
+_DistractionType = None
+_yolo_cls = None
 
 
 def _import_symbol(primary_module: str, fallback_module: str, symbol: str):
@@ -25,16 +30,44 @@ def _import_symbol(primary_module: str, fallback_module: str, symbol: str):
     )
 
 
-gazeTracker = _import_symbol(
-    "src.vision.Trackers.attention_tracker",
-    "Trackers.attention_tracker",
-    "gazeTracker",
-)
-PhoneCalibration = _import_symbol(
-    "src.vision.detectors.phone_calibration",
-    "detectors.phone_calibration",
-    "PhoneCalibration",
-)
+def _get_gaze_tracker_cls():
+    """Return the gaze tracker class, importing it once on first use.
+
+    Lazy loading keeps vision helper modules lightweight when only calibration
+    or menu actions are needed.
+    """
+    global _gaze_tracker_cls
+    if _gaze_tracker_cls is None:
+        _gaze_tracker_cls = _import_symbol(
+            "src.vision.Trackers.attention_tracker",
+            "Trackers.attention_tracker",
+            "gazeTracker",
+        )
+    return _gaze_tracker_cls
+
+
+def _get_phone_calibration_cls():
+    """Return the phone calibration class, importing it once on first use."""
+    global _phone_calibration_cls
+    if _phone_calibration_cls is None:
+        _phone_calibration_cls = _import_symbol(
+            "src.vision.detectors.phone_calibration",
+            "detectors.phone_calibration",
+            "PhoneCalibration",
+        )
+    return _phone_calibration_cls
+
+
+def _get_yolo_cls():
+    """Return the YOLO class, importing ultralytics lazily on first use.
+
+    This keeps module import overhead low for helper-only/test paths that do not
+    instantiate the runtime camera pipeline.
+    """
+    global _yolo_cls
+    if _yolo_cls is None:
+        _yolo_cls = _import_symbol("ultralytics", "ultralytics", "YOLO")
+    return _yolo_cls
 
 
 def _import_distraction_type():
@@ -52,7 +85,12 @@ def _import_distraction_type():
     return None
 
 
-_DistractionType = _import_distraction_type()
+def _get_distraction_type():
+    """Resolve DistractionType once and cache it for subsequent calls."""
+    global _DistractionType
+    if _DistractionType is None:
+        _DistractionType = _import_distraction_type()
+    return _DistractionType
 
 
 class Camera:
@@ -70,13 +108,14 @@ class Camera:
             session_manager: Optional SessionManager instance. When provided,
                 resolved phone and look-away events are logged via log_distraction().
         """
-        self.model = YOLO(model_path)
+        # YOLO stays in __init__ so heavy model load happens only when camera runtime starts.
+        self.model = _get_yolo_cls()(model_path)
         self.cap = cv.VideoCapture(0)  # Open default webcam (index 0)
-        self.eye_tracker = gazeTracker()
+        self.eye_tracker = _get_gaze_tracker_cls()()
         self.detection_params = {"conf": 0.35}  # Default detection confidence; overwritten after calibration
         self.few_shot_signatures = []            # Appearance exemplars saved during phone calibration
         self.few_shot_similarity_threshold = 0.30  # Min cosine similarity to accept a detection as a phone
-        self.few_shot_bundle_path = PhoneCalibration.get_few_shot_bundle_path()
+        self.few_shot_bundle_path = _get_phone_calibration_cls().get_few_shot_bundle_path()
         self.calibrated = False  # True after a successful phone calibration run
 
         # Frame-skip controls: YOLO only runs every Nth frame.
@@ -231,7 +270,7 @@ class Camera:
 
     def calibrate(self) -> bool:
         """Run interactive calibration before starting detection."""
-        calibrator = PhoneCalibration()
+        calibrator = _get_phone_calibration_cls()()
         result = calibrator.run_calibration()  # Uses new multi-phase flow
 
         if result.get("success"):
@@ -450,7 +489,8 @@ class Camera:
         non-phone tracking can continue immediately (phone cooldown does not
         suppress other types).
         """
-        if self._session_manager is None or _DistractionType is None:
+        distraction_type = _get_distraction_type()
+        if self._session_manager is None or distraction_type is None:
             return
 
         now = time.time()
@@ -475,7 +515,7 @@ class Camera:
                 # so the 5s wait doesn't inflate the reported distraction length.
                 duration = max(1, int(self._phone_last_seen - self._phone_distraction_start))
                 try:
-                    self._session_manager.log_distraction(_DistractionType.PHONE_DISTRACTION, duration)
+                    self._session_manager.log_distraction(distraction_type.PHONE_DISTRACTION, duration)
                 except Exception:
                     pass  # Session may not be IN_PROGRESS; never crash the camera loop
                 self._phone_distraction_start = None
@@ -491,7 +531,7 @@ class Camera:
                 end = self._look_away_last_seen or now
                 duration = max(1, int(end - self._look_away_distraction_start))
                 try:
-                    self._session_manager.log_distraction(_DistractionType.LOOK_AWAY_DISTRACTION, duration)
+                    self._session_manager.log_distraction(distraction_type.LOOK_AWAY_DISTRACTION, duration)
                 except Exception:
                     pass
                 self._look_away_distraction_start = None
@@ -501,7 +541,7 @@ class Camera:
                 end = self._left_desk_last_seen or now
                 duration = max(1, int(end - self._left_desk_distraction_start))
                 try:
-                    self._session_manager.log_distraction(_DistractionType.LEFT_DESK_DISTRACTION, duration)
+                    self._session_manager.log_distraction(distraction_type.LEFT_DESK_DISTRACTION, duration)
                 except Exception:
                     pass
                 self._left_desk_distraction_start = None
@@ -533,7 +573,7 @@ class Camera:
                 if now - self._left_desk_last_seen >= self._DISTRACTION_COOLDOWN:
                     duration = max(1, int(self._left_desk_last_seen - self._left_desk_distraction_start))
                     try:
-                        self._session_manager.log_distraction(_DistractionType.LEFT_DESK_DISTRACTION, duration)
+                        self._session_manager.log_distraction(distraction_type.LEFT_DESK_DISTRACTION, duration)
                     except Exception:
                         pass
                     self._left_desk_distraction_start = None
@@ -548,7 +588,7 @@ class Camera:
                 if now - self._look_away_last_seen >= self._DISTRACTION_COOLDOWN:
                     duration = max(1, int(self._look_away_last_seen - self._look_away_distraction_start))
                     try:
-                        self._session_manager.log_distraction(_DistractionType.LOOK_AWAY_DISTRACTION, duration)
+                        self._session_manager.log_distraction(distraction_type.LOOK_AWAY_DISTRACTION, duration)
                     except Exception:
                         pass
                     self._look_away_distraction_start = None
@@ -569,7 +609,8 @@ class Camera:
         Uses last_seen (not now) so duration reflects actual distraction time,
         not time spent waiting for the cooldown to expire.
         """
-        if self._session_manager is None or _DistractionType is None:
+        distraction_type = _get_distraction_type()
+        if self._session_manager is None or distraction_type is None:
             return
 
         if self._phone_distraction_start is not None:
@@ -578,7 +619,7 @@ class Camera:
             end = self._phone_last_seen or time.time()
             duration = max(1, int(end - self._phone_distraction_start))
             try:
-                self._session_manager.log_distraction(_DistractionType.PHONE_DISTRACTION, duration)
+                self._session_manager.log_distraction(distraction_type.PHONE_DISTRACTION, duration)
             except Exception:
                 pass
             self._phone_distraction_start = None
@@ -588,7 +629,7 @@ class Camera:
             end = self._look_away_last_seen or time.time()  # same rationale as phone flush above
             duration = max(1, int(end - self._look_away_distraction_start))
             try:
-                self._session_manager.log_distraction(_DistractionType.LOOK_AWAY_DISTRACTION, duration)
+                self._session_manager.log_distraction(distraction_type.LOOK_AWAY_DISTRACTION, duration)
             except Exception:
                 pass
             self._look_away_distraction_start = None
@@ -598,7 +639,7 @@ class Camera:
             end = self._left_desk_last_seen or time.time()  # same rationale as phone flush above
             duration = max(1, int(end - self._left_desk_distraction_start))
             try:
-                self._session_manager.log_distraction(_DistractionType.LEFT_DESK_DISTRACTION, duration)
+                self._session_manager.log_distraction(distraction_type.LEFT_DESK_DISTRACTION, duration)
             except Exception:
                 pass
             self._left_desk_distraction_start = None
