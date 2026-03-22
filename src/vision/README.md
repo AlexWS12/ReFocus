@@ -9,8 +9,8 @@ Runs as a background loop feeding distraction events into `SessionManager`.
 
 ```
 src/vision/
-├── camera.py                   # Main detection loop — YOLO + DINO + attention tracker, distraction logging
-├── menu.py                     # CLI startup menu: launch camera, phone calibration, gaze calibration
+├── camera.py                   # Main detection loop — YOLO + attention tracker + distraction logging
+├── menu.py                     # CLI startup menu: launch camera, phone calibration, gaze calibration (lazy imports)
 ├── detectors/
 │   ├── dino_detector.py            # Grounding DINO zero-shot phone detector (lazy-loads HuggingFace weights)
 │   ├── dino_calibration_widget.py  # PySide6 UI for the DINOv2 phone calibration flow
@@ -22,7 +22,7 @@ src/vision/
 │   └── __init__.py
 ├── phone_few_shot_bundle.npz   # Persisted calibration output: appearance signatures + tuned thresholds
 ├── Trackers/
-│   ├── attention_tracker.py    # MediaPipe head-pose tracker; outputs attention state (ATTENTIVE / AWAY)
+│   ├── attention_tracker.py    # MediaPipe head-pose tracker; outputs face/pitch/yaw/roll data + face-presence overlay
 │   ├── gaze_calibration.py     # Corner-based gaze calibration — records yaw/pitch bounds per user
 │   ├── gaze_center_calibration.json  # Persisted calibration profile (gitignored — generated at runtime)
 │   └── face_landmarker.task    # MediaPipe model bundle for face landmark detection
@@ -41,11 +41,13 @@ src/vision/
 ### `camera.py`
 Central detection loop. On every frame:
 1. **YOLO** (every Nth frame, frame-skipped for speed) detects cell phones via `classes=[67]`.
-2. **Grounding DINO** runs supplementally every 5 frames or immediately when YOLO finds nothing — catches misses at a slightly lower confidence threshold.
-3. Candidates are deduplicated via IoU, spatially filtered (guide-box gate when uncalibrated), and appearance-filtered (cosine similarity against few-shot exemplars when calibrated).
-4. The winning detection is annotated and passed to **distraction tracking**.
-5. **`gazeTracker`** overlays head-pose state (ATTENTIVE / AWAY) on the frame.
-6. **`_update_distraction_tracking`** calls `session_manager.log_distraction()` when events resolve.
+2. Detections are spatially filtered (guide-box gate when uncalibrated), then appearance-filtered (cosine similarity against few-shot exemplars when calibrated).
+3. A high-confidence fallback path preserves visual continuity when few-shot matching rejects all candidates.
+4. **`gazeTracker`** updates face/head-pose data and overlays neutral face-presence info.
+5. **`_update_distraction_tracking`** logs resolved distractions to `SessionManager`.
+6. **`_get_attention_ui_state`** renders a camera-owned 3-state label: `ATTENTIVE`, `LOOK_AWAY`, `LEFT_DESK`.
+
+Cross-package dependency on intelligence is resolved via lazy `importlib` fallback (`src.intelligence...` first, then flat module name), so there is no `sys.path` mutation in `camera.py`.
 
 Accepts an optional `session_manager` argument:
 ```python
@@ -59,6 +61,8 @@ CLI entry point for the vision subsystem. Options:
 - Run phone calibration
 - Run gaze center calibration
 
+`menu.py` imports symbols lazily per action. Calibration options do not instantiate or import `Camera` runtime dependencies unless the user actually chooses **Launch camera**.
+
 ### `phone_calibration.py`
 Multi-phase interactive calibration:
 1. **Static phase** — user holds phone still inside guide box; YOLO detections are collected.
@@ -67,16 +71,13 @@ Multi-phase interactive calibration:
 
 Output is saved to `phone_few_shot_bundle.npz` and loaded automatically by `Camera` on next startup.
 
-### `dino_detector.py`
-Wraps `IDEA-Research/grounding-dino-tiny` from HuggingFace. Weights are downloaded on first use and cached. When the package is unavailable the detector silently returns no boxes, so the rest of the pipeline is unaffected.
-
-Typical latency: ~80–200 ms on GPU, ~300–800 ms on CPU.
-
 ### `Trackers/attention_tracker.py`
 MediaPipe Face Landmarker–based head-pose tracker. Runs at a capped rate (~5 Hz) to avoid overloading the frame loop. Reports:
 - `face_facing_screen` — bool
 - `attention_state` — `"attentive"` | `"away"` | `"no_face"`
 - `yaw_deg`, `pitch_deg`, `roll_deg` — corrected head-pose angles
+
+UI note: the tracker overlay is intentionally neutral (`Face Present: YES/NO`). Final attention messaging is owned by `camera.py` so left-desk transitions are represented consistently.
 
 ### `Trackers/gaze_calibration.py`
 Corner-based gaze calibration. Asks the user to look at each screen corner, recording the resulting head-pose bounds. This lets the attention tracker handle off-center camera placement and multi-monitor setups correctly.
@@ -89,15 +90,21 @@ Corner-based gaze calibration. Asks the user to look at each screen corner, reco
 
 - **Phone distraction** — opens when a phone is first accepted; stays open during a 5-second cooldown so brief flickers don't split one event into many; logs via `log_distraction(PHONE_DISTRACTION, duration)` when the cooldown expires.
 - **Look-away distraction** — same cooldown logic using head-pose `face_facing_screen`.
+- **Left-desk transition** — no-face intervals start as `LOOK_AWAY`; after 10s continuous absence they are promoted to `LEFT_DESK`.
 - **Priority suppression** — phone takes priority only while events overlap in the same frame; phone cooldown does not suppress non-phone tracking.
 - **Flush on exit** — `Camera.release()` calls `_flush_open_distractions()` so any event still open when the camera closes is logged using `last_seen` as the end time (not the shutdown timestamp).
+
+Overlay state shown in camera frame: `ATTENTIVE` (green), `LOOK_AWAY` (orange), `LEFT_DESK` (red).
 
 ---
 
 ## Running
 
 ```bash
-# From src/vision/
+# From project root
+python -m src.vision.menu
+
+# Or from src/vision/
 python menu.py
 
 # Or directly:
@@ -117,8 +124,9 @@ The test setup now isolates test code from functional runtime code while preserv
     - `src/intelligence/tests`
 - **Shared fixtures in `conftest.py`** create mock camera state and test-specific SessionManager instances.
 - **File-based test DBs** are used intentionally and cleaned up after each test run.
+- **Import resolution uses project-root-first fallback helpers** (via `importlib`) instead of `sys.path` mutation in vision runtime/tests.
 - **Interactive GUI calibration test** is intentionally skipped in automated pytest runs.
-- **Direct-run support retained** for debugging (`python .../test_*.py`) with runtime import fallback comments in test files.
+- **Direct-run support retained** for debugging (`python .../test_*.py`) with runtime import fallback helpers in test files.
 
 ### Test Commands
 

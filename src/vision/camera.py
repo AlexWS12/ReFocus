@@ -7,8 +7,34 @@ import importlib
 import numpy as np
 import os
 import time
-from Trackers.attention_tracker import gazeTracker
-from detectors.phone_calibration import PhoneCalibration
+
+
+def _import_symbol(primary_module: str, fallback_module: str, symbol: str):
+    """Resolve a symbol via project-root package path first, then local path.
+
+    This keeps camera.py importable both as `src.vision.camera` and as `camera`
+    without mutating sys.path.
+    """
+    for module_path in (primary_module, fallback_module):
+        try:
+            return getattr(importlib.import_module(module_path), symbol)
+        except (ModuleNotFoundError, AttributeError):
+            continue
+    raise ImportError(
+        f"Cannot resolve {symbol} from {primary_module} or {fallback_module}"
+    )
+
+
+gazeTracker = _import_symbol(
+    "src.vision.Trackers.attention_tracker",
+    "Trackers.attention_tracker",
+    "gazeTracker",
+)
+PhoneCalibration = _import_symbol(
+    "src.vision.detectors.phone_calibration",
+    "detectors.phone_calibration",
+    "PhoneCalibration",
+)
 
 
 def _import_distraction_type():
@@ -582,14 +608,8 @@ class Camera:
 # Runs only when camera.py is executed directly
 if __name__ == "__main__":
     cam = Camera()
-
-    # Run calibration first
-    print("Starting calibration...")
-    if cam.calibrate():
-        print("Calibration successful! Starting detection...")
-    else:
-        print("Calibration failed. Using default parameters.")
-
+    # Calibration is intentionally menu-driven (see vision/menu.py).
+    # Running camera.py directly starts detection immediately.
     while True:
         data = cam.read_frame()
         if data is None:

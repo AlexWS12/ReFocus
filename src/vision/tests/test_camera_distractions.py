@@ -13,7 +13,10 @@ Or directly:
 """
 
 import importlib
+import os
+import sys
 import time
+from typing import Any
 import pytest
 
 
@@ -24,6 +27,26 @@ def _import(primary: str, fallback: str, symbol: str):
             return getattr(importlib.import_module(mod), symbol)
         except (ModuleNotFoundError, AttributeError):
             continue
+
+    # Direct-run fallback: add project root once when this file is executed as a script.
+    project_root = os.path.normpath(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..")
+    )
+    direct_paths = [
+        project_root,
+        os.path.join(project_root, "src", "vision"),
+        os.path.join(project_root, "src", "intelligence"),
+    ]
+    for path in direct_paths:
+        if path not in sys.path:
+            sys.path.insert(0, path)
+
+    for mod in (primary, fallback):
+        try:
+            return getattr(importlib.import_module(mod), symbol)
+        except (ModuleNotFoundError, AttributeError):
+            continue
+
     raise ImportError(f"Cannot resolve {symbol} from {primary} or {fallback}")
 
 
@@ -31,7 +54,7 @@ Camera = _import("src.vision.camera", "camera", "Camera")
 
 
 def tick(
-    camera: Camera,
+    camera: Any,
     *,
     phone_detected: bool,
     face_present: bool = True,
