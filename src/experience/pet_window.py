@@ -67,6 +67,9 @@ class petWindow(QMainWindow):
     # End session and show the main window
     def _end_session(self):
         app = QApplication.instance()
+        app.session_manager.end_session()
+        app.session_manager.reset()
+        app.main_window.pages_stack.setCurrentIndex(0)
         app.main_window.show()
         self.hide()
 

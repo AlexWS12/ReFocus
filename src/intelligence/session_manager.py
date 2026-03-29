@@ -1,7 +1,10 @@
 import time
 import math
 from enum import Enum
-from database import get_database
+try:
+    from src.intelligence.database import get_database
+except ImportError:
+    from database import get_database
 
 class SessionState(Enum):
     READY = "ready"

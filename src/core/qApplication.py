@@ -5,6 +5,7 @@ from src.experience.main_window import MainWindow
 from src.experience.pet_window import petWindow
 from src.core.database_reader import DatabaseReader
 from src.core.vision_manager import VisionManager
+from src.intelligence.session_manager import SessionManager
 
 from pathlib import Path
 
@@ -20,6 +21,7 @@ class QApplication(QApplication):
         # initialize stats reader
         self.database_reader = DatabaseReader()
         self.vision_manager = VisionManager(self)
+        self.session_manager = SessionManager()
 
         self.main_window = MainWindow()
         self.main_window.show()

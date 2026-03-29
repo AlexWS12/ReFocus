@@ -58,6 +58,7 @@ class Setup(QWidget):
 
     # start session and show the pet window
     def start_session(self):
+        self.app.session_manager.start_session()
         self.app.main_window.pages_stack.setCurrentIndex(1)
         self.app.main_window.hide()
         self.app.pet_window.show()

@@ -1,7 +1,7 @@
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from src.vision.camera import Camera
-from src.vision.phone_calibration import PhoneCalibration
+from src.vision.detectors.phone_calibration import PhoneCalibration
 from src.vision.Trackers.gaze_calibration import GazeCalibrator
 
 
