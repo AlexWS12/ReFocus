@@ -64,9 +64,9 @@ class petWindow(QMainWindow):
                     return True
         return super().eventFilter(obj, event)
 
-    # End session and show the main window
     def _end_session(self):
         app = QApplication.instance()
+        app.vision_manager.stop_session()
         app.session_manager.end_session()
         app.session_manager.reset()
         app.main_window.pages_stack.setCurrentIndex(0)

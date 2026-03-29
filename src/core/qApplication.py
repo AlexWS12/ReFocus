@@ -28,7 +28,7 @@ class QApplication(QApplication):
 
         self.open_pet_window()
         QTimer.singleShot(0, self.position_pet_window)
-        self.aboutToQuit.connect(self.vision_manager.stop)
+        self.aboutToQuit.connect(self.vision_manager.stop_session)
 
     def run(self):
         self.exec()
