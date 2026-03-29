@@ -1,45 +1,49 @@
-from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QApplication
+from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QPushButton, QApplication
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt, QEvent
 
 from src.experience.widgets.centered_label import CenteredLabel
+
 
 class petWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Virtual Pet")
 
-        # Set the window flags to make it frameless and stay on top
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
-
-        # Set the background to transparent
         self.setStyleSheet("background: transparent;")
 
-        # Load the pet image from the static assets folder
         self.image = QPixmap("src/experience/static/Panther.png")
 
-        # Display the image inside a label
         self.label = CenteredLabel("")
-
-        # Scale the image to 80x80 pixels while maintaining aspect ratio
         scaled = self.image.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.label.setPixmap(scaled)
-        self.setFixedSize(100, 100)
 
-        # Container to hold the label
+        self.session_btn = QPushButton("Session")
+        self.session_btn.setFixedHeight(24)
+        self.session_btn.setStyleSheet(
+            "background-color: #3b7deb; color: #fff; border: none; "
+            "border-radius: 6px; font-size: 11px; padding: 2px 8px;"
+        )
+        self.session_btn.setCursor(Qt.PointingHandCursor)
+        self.session_btn.clicked.connect(self._show_session)
+
         self.container = QWidget()
         self.layout = QVBoxLayout()
+        self.layout.setContentsMargins(4, 4, 4, 4)
+        self.layout.setSpacing(4)
         self.container.setLayout(self.layout)
         self.layout.addWidget(self.label)
+        self.layout.addWidget(self.session_btn)
         self.setCentralWidget(self.container)
 
-        # Draggable window
+        self.setFixedSize(100, 130)
+
         self.drag_position = None
         self.label.installEventFilter(self)
         self.label.setCursor(Qt.OpenHandCursor)
 
-    # Event filter for the pet window to make it draggable
     def eventFilter(self, obj, event):
         if obj == self.label:
             if event.type() == QEvent.MouseButtonPress:
@@ -58,19 +62,10 @@ class petWindow(QMainWindow):
                     self.drag_position = None
                     self.label.setCursor(Qt.OpenHandCursor)
                     return True
-            elif event.type() == QEvent.MouseButtonDblClick:
-                if event.button() == Qt.LeftButton:
-                    self._end_session()
-                    return True
         return super().eventFilter(obj, event)
 
-    def _end_session(self):
+    def _show_session(self):
         app = QApplication.instance()
-        app.vision_manager.stop_session()
-        app.session_manager.end_session()
-        app.session_manager.reset()
-        app.main_window.pages_stack.setCurrentIndex(0)
+        app.main_window.pages_stack.setCurrentIndex(1)
         app.main_window.show()
-        self.hide()
-
-
+        app.main_window.raise_()
