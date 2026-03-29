@@ -1,9 +1,17 @@
 
 import importlib
+from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 import questionary
 import sys
+
+# When menu.py is run directly (python src/vision/menu.py), only src/vision/
+# lands on sys.path and cross-package imports like src.intelligence.* fail.
+# Insert the project root so all src.* packages are always resolvable.
+_project_root = Path(__file__).resolve().parents[2]
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
 if sys.platform == "win32":
     import msvcrt
@@ -26,7 +34,13 @@ console = Console()
 
 
 def launch_camera() -> None:
-    """Run the camera loop with phone and attention overlays."""
+    """Run the camera loop with phone and attention overlays.
+
+    Requires phone calibration to have been run at least once — the detection
+    thresholds (YOLO confidence, appearance similarity gate, fallback gate) are
+    loaded exclusively from the calibration bundle. If the bundle is missing the
+    user is redirected to calibrate before the camera starts.
+    """
     # OpenCV import is local so calibration-only menu usage stays lightweight.
     import cv2 as cv
 
@@ -36,6 +50,23 @@ def launch_camera() -> None:
     SessionManager = _import_symbol(
         "src.intelligence.session_manager", "session_manager", "SessionManager"
     )
+
+    # Guard: refuse to start if the user has never calibrated.
+    # Thresholds have no hardcoded defaults — calibration must run first.
+    PhoneCalibration = _import_symbol(
+        "src.vision.detectors.phone_calibration",
+        "detectors.phone_calibration",
+        "PhoneCalibration",
+    )
+    bundle_path = PhoneCalibration.get_few_shot_bundle_path()
+    import os
+    if not os.path.exists(bundle_path):
+        console.print(
+            "[yellow]Phone calibration has not been run yet.[/yellow]\n"
+            "Please run [bold]Calibrate phone detection[/bold] first so the camera "
+            "knows what your phone looks like and what confidence thresholds to use."
+        )
+        return
 
     # SessionManager attaches to the shared intelligence DB lazily; the app layer
     # is responsible for bootstrapping persistent state when running the full UI.

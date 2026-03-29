@@ -112,9 +112,16 @@ class Camera:
         self.model = _get_yolo_cls()(model_path)
         self.cap = cv.VideoCapture(0)  # Open default webcam (index 0)
         self.eye_tracker = _get_gaze_tracker_cls()()
-        self.detection_params = {"conf": 0.35}  # Default detection confidence; overwritten after calibration
+        self.detection_params = {}               # Populated exclusively from the calibration bundle
         self.few_shot_signatures = []            # Appearance exemplars saved during phone calibration
-        self.few_shot_similarity_threshold = 0.30  # Min cosine similarity to accept a detection as a phone
+
+        # --- User-tunable detection thresholds ---
+        # Set by _load_few_shot_bundle() from the values learned during calibration.
+        # Can be adjusted at runtime (e.g. from the frontend) without re-running calibration.
+        self.yolo_conf_threshold: float | None = None       # YOLO minimum confidence; None until calibrated
+        self.few_shot_similarity_threshold: float | None = None  # Cosine similarity gate; None until calibrated
+        self.fallback_conf_threshold: float | None = None   # Accept high-confidence detection even if appearance rejected; None until calibrated
+
         self.few_shot_bundle_path = _get_phone_calibration_cls().get_few_shot_bundle_path()
         self.calibrated = False  # True after a successful phone calibration run
 
@@ -146,16 +153,31 @@ class Camera:
     # ------------------------------------------------------------------
 
     def _load_few_shot_bundle(self):
-        """Load persisted few-shot signatures and thresholds from the last calibration run."""
+        """Load calibration-derived thresholds and exemplars from the saved bundle.
+
+        Sets yolo_conf_threshold, few_shot_similarity_threshold, and
+        fallback_conf_threshold from values computed during calibration.
+        All three remain None if the bundle is missing or corrupt, signalling
+        that the user must run phone calibration before launching the camera.
+
+        [INTELLIGENCE TEAM] conf_threshold and threshold_global must be present
+        in the .npz bundle written by PhoneCalibration._save_few_shot_bundle().
+        If either key is missing the camera will refuse to start (calibrated=False).
+
+        [UX/UI TEAM] yolo_conf_threshold, few_shot_similarity_threshold, and
+        fallback_conf_threshold are the three values users should be able to
+        adjust from the settings panel without re-running calibration. Expose
+        them as sliders/inputs and write back to cam.yolo_conf_threshold etc.
+        at runtime — no restart needed.
+        """
         if not os.path.exists(self.few_shot_bundle_path):
-            # No calibration file yet — disable few-shot filtering and fall back to YOLO-only detection
             self.detection_params["few_shot_enabled"] = False
             return
 
         try:
             bundle = np.load(self.few_shot_bundle_path, allow_pickle=False)
 
-            # Each row in "signatures" is a 257-d descriptor (256 HS-histogram bins + 1 edge-density feature)
+            # Each row is a 257-d descriptor (256 HS-histogram bins + 1 edge-density feature)
             signatures = (
                 bundle["signatures"]
                 if "signatures" in bundle.files
@@ -165,27 +187,34 @@ class Camera:
                 np.asarray(sig, dtype=np.float32) for sig in signatures
             ]
 
-            # Global cosine similarity threshold chosen during calibration
+            # [INTELLIGENCE TEAM] These three thresholds come exclusively from calibration.
+            # No hardcoded fallbacks — if a key is missing the bundle is considered incomplete.
+            self.yolo_conf_threshold = (
+                float(bundle["conf_threshold"])
+                if "conf_threshold" in bundle.files
+                else None
+            )
             self.few_shot_similarity_threshold = (
                 float(bundle["threshold_global"])
                 if "threshold_global" in bundle.files
-                else 0.30
+                else None
+            )
+            # fallback_conf_threshold: accept a detection that appearance-matching rejected
+            # when YOLO is this confident. Seeded slightly above yolo_conf_threshold so it
+            # only fires on genuinely high-confidence detections the appearance gate may have
+            # been too strict about. [UX/UI TEAM] expose as an advanced slider.
+            self.fallback_conf_threshold = (
+                min(1.0, self.yolo_conf_threshold + 0.15)
+                if self.yolo_conf_threshold is not None
+                else None
             )
 
-            # Mirror the confidence level the calibrator found optimal so runtime matches calibration behavior
-            if "conf_threshold" in bundle.files:
-                self.detection_params["conf"] = float(bundle["conf_threshold"])
-
-            # Require at least 3 exemplars before enabling few-shot filtering (fewer = unreliable threshold)
-            self.detection_params["few_shot_enabled"] = (
-                len(self.few_shot_signatures) >= 3
-            )
-            self.detection_params["few_shot_similarity_threshold"] = (
-                self.few_shot_similarity_threshold
-            )
+            self.detection_params["conf"] = self.yolo_conf_threshold
+            self.detection_params["few_shot_enabled"] = len(self.few_shot_signatures) >= 3
+            self.detection_params["few_shot_similarity_threshold"] = self.few_shot_similarity_threshold
             self.calibrated = True
         except (OSError, ValueError, KeyError):
-            # Corrupt or incompatible bundle — degrade gracefully to plain YOLO
+            # Corrupt or incompatible bundle — user must re-run calibration
             self.few_shot_signatures = []
             self.detection_params["few_shot_enabled"] = False
             self.calibrated = False
@@ -275,12 +304,12 @@ class Camera:
 
         if result.get("success"):
             self.detection_params = calibrator.get_optimal_params()
-            self.calibrated = True
-            print(f"Using params: {self.detection_params}")
+            # Reload the bundle so all three tunable thresholds are refreshed from
+            # the newly saved calibration data.
+            self._load_few_shot_bundle()
             return True
         else:
             self.calibrated = False
-            print(f"Calibration failed: {result.get('message')}")
             return False
 
     # ------------------------------------------------------------------
@@ -328,7 +357,7 @@ class Camera:
         # --- YOLO detection (frame-skipped) ---
         # stream=True yields results lazily, reducing peak memory allocation.
         # On skipped frames the cached result is reused; ByteTrack maintains continuity.
-        yolo_conf = self.detection_params.get("conf", 0.35)
+        yolo_conf = self.yolo_conf_threshold or self.detection_params.get("conf", 0.35)
         if self._yolo_frame_counter % self.yolo_frame_skip == 0 or self._last_yolo_results is None:
             self._last_yolo_results = list(
                 self.model(
@@ -372,11 +401,9 @@ class Camera:
                 crop = self._extract_crop_from_coords(frame, x1, y1, x2, y2)
                 sig = self._compute_few_shot_signature(crop)
                 similarity = self._few_shot_similarity(sig)
-                print(f"YOLO conf: {conf:.3f}, Similarity: {similarity:.3f}, Threshold: {self.few_shot_similarity_threshold:.3f}")
                 if similarity < self.few_shot_similarity_threshold:
-                    print("Rejected due to low similarity")
-                    # Keep track of high-confidence fallback
-                    if conf > 0.5 and conf > fallback_conf:  # High confidence fallback
+                    # Keep as fallback if YOLO is confident enough despite appearance rejection
+                    if self.fallback_conf_threshold is not None and conf > self.fallback_conf_threshold and conf > fallback_conf:
                         fallback_conf = conf
                         fallback_coords = (x1, y1, x2, y2)
                     rejected = True
@@ -390,9 +417,8 @@ class Camera:
                 best_coords = (x1, y1, x2, y2)
                 best_similarity = similarity
 
-        # Fallback: if no good match but high-confidence detection available, use it
+        # Fallback: use high-confidence detection even if appearance gate rejected it
         if best_coords is None and fallback_coords is not None:
-            print("Using high-confidence fallback detection")
             best_coords = fallback_coords
             best_conf = fallback_conf
             best_similarity = 0.0  # Indicate it's a fallback
@@ -404,7 +430,7 @@ class Camera:
             cv.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 3)
             cv.putText(
                 annotated,
-                f"PHONE {best_conf:.0%}  sim:{best_similarity:.2f}",
+                f"PHONE {best_conf:.0%}",
                 (x1, y1 - 10),
                 cv.FONT_HERSHEY_SIMPLEX,
                 0.65,
