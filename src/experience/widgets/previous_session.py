@@ -23,6 +23,9 @@ class PreviousSession(QFrame):
 
     def refresh(self, data):
         prev = data.get("previous_session_data") or {}
-        self._score_label.setText(f"Score:{prev.get('score') or 0}")
-        self._focus_label.setText(f"Focused percentage: {prev.get('focus_percentage') or 0}")
-        self._events_label.setText(f"Number of Sessions:{prev.get('events') or 0}")
+        score = prev.get("score") or 0
+        focus_pct = prev.get("focus_percentage") or 0
+        events = prev.get("events") or 0
+        self._score_label.setText(f"Score: {score:.2f}")
+        self._focus_label.setText(f"Focused percentage: {focus_pct:.2f}%")
+        self._events_label.setText(f"Distractions: {events}")

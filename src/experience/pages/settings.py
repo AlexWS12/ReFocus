@@ -11,7 +11,7 @@ class Settings(QWidget):
         self.setLayout(self.layout)
         self.layout.addWidget(CenteredLabel("Settings"))
 
-        self.dark_mode = Button("Chnage Theme");
+        self.dark_mode = Button("Change Theme")
         self.app = QApplication.instance()
         self.layout.addWidget(self.dark_mode)
 

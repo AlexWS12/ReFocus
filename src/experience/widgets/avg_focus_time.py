@@ -18,5 +18,5 @@ class AvgFocusTime(QFrame):
         self.refresh(parent.data)
 
     def refresh(self, data):
-        avg = data.get("user_info", {}).get("avg_focus_time", 0)
-        self._value_label.setText(f"{avg} minutes")
+        avg = data.get("user_info", {}).get("avg_focus_time", 0) or 0
+        self._value_label.setText(f"{avg:.2f} minutes")

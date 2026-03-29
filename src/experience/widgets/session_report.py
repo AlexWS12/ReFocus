@@ -131,7 +131,7 @@ class SessionReport(QWidget):
         grid.setSpacing(10)
         grid.addWidget(_StatCard("Duration", _fmt_duration(duration)), 0, 0)
         grid.addWidget(_StatCard("Focused Time", _fmt_duration(focused)), 0, 1)
-        grid.addWidget(_StatCard("Focus %", f"{focus_pct}%"), 0, 2)
+        grid.addWidget(_StatCard("Focus %", f"{focus_pct:.2f}%"), 0, 2)
         grid.addWidget(_StatCard("XP Earned", f"+{xp}"), 1, 0)
         grid.addWidget(_StatCard("Coins Earned", f"+{coins}"), 1, 1)
         grid.addWidget(_StatCard("Distractions", str(events)), 1, 2)

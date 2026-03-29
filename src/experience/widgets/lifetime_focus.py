@@ -15,5 +15,5 @@ class LifetimeFocus(QWidget):
         self.refresh(parent.data)
 
     def refresh(self, data):
-        seconds = data.get("session_analytics", {}).get("lifetime_focus_seconds", 0)
-        self._value_label.setText(f"{seconds} seconds")
+        seconds = data.get("session_analytics", {}).get("lifetime_focus_seconds", 0) or 0
+        self._value_label.setText(f"{seconds:.2f} seconds")
