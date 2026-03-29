@@ -13,6 +13,10 @@ class AvgFocusTime(QFrame):
         self.setLayout(self.layout)
 
         self.layout.addWidget(CenteredLabel("Average Focus Time"))
-        self.layout.addWidget(
-            CenteredLabel(f"{parent.data['user_info']['avg_focus_time']} minutes", secondary=True)
-        )
+        self._value_label = CenteredLabel("", secondary=True)
+        self.layout.addWidget(self._value_label)
+        self.refresh(parent.data)
+
+    def refresh(self, data):
+        avg = data.get("user_info", {}).get("avg_focus_time", 0) or 0
+        self._value_label.setText(f"{avg:.2f} minutes")

@@ -56,8 +56,9 @@ class Setup(QWidget):
         self.calibrate_phone_btn.setEnabled(True)
         self.calibrate_gaze_btn.setEnabled(True)
 
-    # start session and show the pet window
     def start_session(self):
+        self.app.session_manager.start_session()
+        self.app.vision_manager.start_session(self.app.session_manager)
         self.app.main_window.pages_stack.setCurrentIndex(1)
         self.app.main_window.hide()
         self.app.pet_window.show()

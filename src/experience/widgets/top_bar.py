@@ -26,4 +26,9 @@ class TopBar(QWidget):
         self.layout.addWidget(self.level)
         self.layout.addWidget(self.exp)
         self.layout.addWidget(self.coin)
+
+    def refresh(self, data):
+        self.level.setText(f"Level {data['level']}")
+        self.exp.setText(f"{data['exp']} xp")
+        self.coin.setText(f"{data['coins']} coins")
         

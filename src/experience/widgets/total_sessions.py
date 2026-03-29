@@ -10,6 +10,10 @@ class TotalSessions(QWidget):
         self.setLayout(self.layout)
 
         self.layout.addWidget(CenteredLabel("Total Sessions"))
-        self.layout.addWidget(
-            CenteredLabel(f"{parent.data['session_analytics']['total_sessions']}", secondary=True)
-        )
+        self._value_label = CenteredLabel("", secondary=True)
+        self.layout.addWidget(self._value_label)
+        self.refresh(parent.data)
+
+    def refresh(self, data):
+        total = data.get("session_analytics", {}).get("total_sessions", 0)
+        self._value_label.setText(f"{total}")

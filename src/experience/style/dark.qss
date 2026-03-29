@@ -136,6 +136,18 @@ QPushButton#startSessionButton:hover {
     background-color: #3a6fd6;
 }
 
+QPushButton#stopSessionButton {
+    background-color: #e74c3c;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 14px;
+}
+
+QPushButton#stopSessionButton:hover {
+    background-color: #c0392b;
+}
+
 QLabel#xpLabel,
 QLabel#coinLabel {
     color: #f5a623;
