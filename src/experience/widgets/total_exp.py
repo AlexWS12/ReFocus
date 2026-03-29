@@ -10,4 +10,9 @@ class TotalExp(QWidget):
         self.setLayout(self.layout)
 
         self.layout.addWidget(CenteredLabel("Total Exp"))
-        self.layout.addWidget(CenteredLabel(f"{parent.data['total_exp']}", secondary=True))
+        self._value_label = CenteredLabel("", secondary=True)
+        self.layout.addWidget(self._value_label)
+        self.refresh(parent.data)
+
+    def refresh(self, data):
+        self._value_label.setText(f"{data.get('total_exp', 0)}")

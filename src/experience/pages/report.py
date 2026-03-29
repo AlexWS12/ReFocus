@@ -15,8 +15,6 @@ class Report(QWidget):
 
         # load report data
         self.data = self.app.database_reader.load_report_data()
-
-        # add total exp to the data
         self.data['total_exp'] = parent.data['exp']
 
         # layout for the report
@@ -24,7 +22,20 @@ class Report(QWidget):
         self.setLayout(self.layout)
 
         # add widgets to the grid layout
-        self.layout.addWidget(LifetimeFocus(self), 0, 0)
-        self.layout.addWidget(TotalSessions(self), 0, 1)
-        self.layout.addWidget(LongestFocus(self), 1, 0)
-        self.layout.addWidget(TotalExp(self), 1, 1)
+        self.lifetime_focus = LifetimeFocus(self)
+        self.total_sessions = TotalSessions(self)
+        self.longest_focus = LongestFocus(self)
+        self.total_exp = TotalExp(self)
+        self.layout.addWidget(self.lifetime_focus, 0, 0)
+        self.layout.addWidget(self.total_sessions, 0, 1)
+        self.layout.addWidget(self.longest_focus, 1, 0)
+        self.layout.addWidget(self.total_exp, 1, 1)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.data = self.app.database_reader.load_report_data()
+        self.data['total_exp'] = self.app.database_reader.get_topbar_data().get('exp', 0)
+        self.lifetime_focus.refresh(self.data)
+        self.total_sessions.refresh(self.data)
+        self.longest_focus.refresh(self.data)
+        self.total_exp.refresh(self.data)

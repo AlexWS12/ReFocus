@@ -44,6 +44,12 @@ class Dashboard(QWidget):
         start_btn.clicked.connect(self.start_setup)
         self.layout.addWidget(start_btn)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.data = self.app.database_reader.load_dashboard_data()
+        self.AvgFocusTime.refresh(self.data)
+        self.PreviousSession.refresh(self.data)
+
     def start_setup(self):
         self.app.main_window.pages_stack.setCurrentIndex(6)
     

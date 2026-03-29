@@ -67,3 +67,9 @@ class MainWindow(QMainWindow):
         self.topbar_pages_layout.addWidget(self.pages_stack)
 
         self.show()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        app = QApplication.instance()
+        self.data = app.database_reader.get_topbar_data()
+        self.topbar.refresh(self.data)

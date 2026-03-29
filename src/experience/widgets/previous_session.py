@@ -12,13 +12,17 @@ class PreviousSession(QFrame):
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
 
-        self.prev = parent.data.get("previous_session_data") or {}
-
         self.layout.addWidget(CenteredLabel("Previous Session"))
-        self.layout.addWidget(CenteredLabel(f"Score:{self.prev.get('score') or 0}", secondary=True))
-        self.layout.addWidget(
-            CenteredLabel(f"Focused percentage: {self.prev.get('focus_percentage') or 0}", secondary=True)
-        )
-        self.layout.addWidget(
-            CenteredLabel(f"Number of Sessions:{self.prev.get('events') or 0}", secondary=True)
-        )
+        self._score_label = CenteredLabel("", secondary=True)
+        self._focus_label = CenteredLabel("", secondary=True)
+        self._events_label = CenteredLabel("", secondary=True)
+        self.layout.addWidget(self._score_label)
+        self.layout.addWidget(self._focus_label)
+        self.layout.addWidget(self._events_label)
+        self.refresh(parent.data)
+
+    def refresh(self, data):
+        prev = data.get("previous_session_data") or {}
+        self._score_label.setText(f"Score:{prev.get('score') or 0}")
+        self._focus_label.setText(f"Focused percentage: {prev.get('focus_percentage') or 0}")
+        self._events_label.setText(f"Number of Sessions:{prev.get('events') or 0}")
