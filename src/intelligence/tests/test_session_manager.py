@@ -51,6 +51,7 @@ class TestSessionManagerLifecycle:
         assert report["points_earned"] >= 1
         assert report["coins_earned"] >= 1
         assert report["phone_distractions"] == 1
+        assert report["phone_time"] == 30
         assert report["look_away_distractions"] == 1
 
     def test_pause_resume(self, session_manager):

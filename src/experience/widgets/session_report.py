@@ -145,7 +145,7 @@ class SessionReport(QWidget):
 
     def _build_breakdown(self, report: dict, total_distracted: int) -> QFrame | None:
         rows = [
-            ("Phone", report.get("phone_distractions", 0), None),
+            ("Phone", report.get("phone_distractions", 0), report.get("phone_time", 0)),
             ("Looked Away", report.get("look_away_distractions", 0), report.get("look_away_time", 0)),
             ("Left Desk", report.get("left_desk_distractions", 0), report.get("time_away", 0)),
             ("App", report.get("app_distractions", 0), None),

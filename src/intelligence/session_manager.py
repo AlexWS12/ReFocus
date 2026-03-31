@@ -166,8 +166,10 @@ class SessionManager:
         idle_count      = get(DistractionType.IDLE_DISTRACTION,      "count")
 
         # Per-type times for the time-based columns
+        # phone_time     = time spent with a phone distraction active
         # time_away      = left desk time (physically absent from desk)
         # look_away_time = look away time (eyes off screen but still at desk)
+        phone_time     = get(DistractionType.PHONE_DISTRACTION, "time")
         time_away      = get(DistractionType.LEFT_DESK_DISTRACTION, "time")
         look_away_time = get(DistractionType.LOOK_AWAY_DISTRACTION, "time")
 
@@ -187,7 +189,7 @@ class SessionManager:
             UPDATE sessions SET
                 end_time=?, duration=?, score=?,
                 focused_time=?, events=?, distraction_time=?,
-                time_away=?, look_away_time=?,
+                time_away=?, look_away_time=?, phone_time=?,
                 phone_distractions=?, look_away_distractions=?,
                 left_desk_distractions=?, app_distractions=?, idle_distractions=?,
                 focus_percentage=?,
@@ -197,7 +199,7 @@ class SessionManager:
             time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(self.session_end_time)),
             duration, score,
             focused_time, total_events, distraction_time,
-            time_away, look_away_time,
+            time_away, look_away_time, phone_time,
             phone_count, look_away_count, left_desk_count, app_count, idle_count,
             focus_percentage,
             points_earned, coins_earned,
@@ -367,6 +369,7 @@ class SessionManager:
             "events":                 session_data["events"],
             "time_away":              session_data["time_away"],
             "look_away_time":         session_data["look_away_time"],
+            "phone_time":             session_data["phone_time"],
             "distraction_time":       session_data["distraction_time"],
             "phone_distractions":     session_data["phone_distractions"],
             "look_away_distractions": session_data["look_away_distractions"],
