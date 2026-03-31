@@ -30,3 +30,9 @@ Phone calibration and few-shot validation are in place. Week 6 shifts toward int
 - [x] Cleaner camera/calibration separation
 - [x] Lightweight import flow for runtime helper modules
 - [ ] Brief handoff note covering calibration/runtime expectations
+
+
+## Notes from tuesday 31 meeting
+- create a set that has disctractions in camera.py where distractions (look away, phone, left desk) can be unabled by the user and therefore not read by camera.py during a study session
+- correct the detection, the session starts when the button is clicked but there is a delay where the screen freezes, the detection also starts when the button is clicked, it shouldn't (add a delay)
+- 

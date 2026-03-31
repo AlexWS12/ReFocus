@@ -150,6 +150,8 @@ class Camera:
         # to count continuous *no-face* time toward the promotion threshold.
         self._no_face_since: float | None = None  # wall-clock time the face first disappeared in the current absence
 
+        self._ready = False  # Set to True after the first successful frame capture
+
         self._load_few_shot_bundle()
 
     # ------------------------------------------------------------------
@@ -336,6 +338,7 @@ class Camera:
         ret, frame = self.cap.read()
         if not ret:
             return None
+        self._ready = True
 
         h = frame.shape[0]
         annotated = frame.copy()
@@ -530,6 +533,8 @@ class Camera:
         non-phone tracking can continue immediately (phone cooldown does not
         suppress other types).
         """
+        if not self._ready:
+            return
         distraction_type = _get_distraction_type()
         if self._session_manager is None or distraction_type is None:
             return
