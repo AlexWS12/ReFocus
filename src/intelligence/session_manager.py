@@ -380,3 +380,7 @@ class SessionManager:
         }
 
         return report
+    
+    # TODO: Find a way to integrate user settings into analysis
+    # ~ Maybe pass ghost values using kNN(nearest neighbors)
+    # ~ Maybe skip over empty rows when parsing db 
