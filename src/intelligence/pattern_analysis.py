@@ -412,6 +412,17 @@ class PatternAnalyzer:
 
     # ------------------------------------------------------------------
     # Machine learning analyses (scikit-learn)
+    #
+    # These methods apply supervised and unsupervised ML models to the
+    # same session data used by the rule-based analyses above.  The goal
+    # is to surface patterns that simple averages and buckets can miss —
+    # for example, which combination of factors best predicts a high
+    # score, or whether sessions naturally group into distinct profiles.
+    #
+    # Models used:
+    #   1. Random Forest Regressor  – feature importance (what matters most)
+    #   2. K-Means Clustering       – session profile grouping
+    #   3. Linear Regression        – score trend forecasting
     # ------------------------------------------------------------------
 
     def _build_feature_matrix(self, sessions: list) -> tuple[np.ndarray, np.ndarray]:
@@ -420,6 +431,10 @@ class PatternAnalyzer:
 
         Features per session: hour, day_of_week, duration, and each
         distraction count.  Target: session score.
+
+        This is the shared data-preparation step consumed by every ML
+        method.  Each row in X corresponds to one completed session,
+        and the column order matches _ML_FEATURES.
         """
         X, y = [], []
         for s in sessions:
@@ -427,11 +442,15 @@ class PatternAnalyzer:
                 dt = datetime.fromisoformat(s["start_time"])
             except (ValueError, TypeError):
                 continue
+
+            # Build one feature row per session.
+            # Columns: [hour, day_of_week, duration, phone, look_away,
+            #           left_desk, app, idle]
             X.append([
-                dt.hour,
-                dt.weekday(),
-                s["duration"] or 0,
-                s["phone_distractions"] or 0,
+                dt.hour,                           # 0-23, when the session started
+                dt.weekday(),                      # 0=Mon … 6=Sun
+                s["duration"] or 0,                # total length in seconds
+                s["phone_distractions"] or 0,      # distraction event counts ↓
                 s["look_away_distractions"] or 0,
                 s["left_desk_distractions"] or 0,
                 s["app_distractions"] or 0,
@@ -440,10 +459,27 @@ class PatternAnalyzer:
             y.append(s["score"])
         return np.array(X, dtype=float), np.array(y, dtype=float)
 
+    # ---- 1. Feature importance (Random Forest) ----------------------
+
     def ml_feature_importance(self, sessions: list) -> dict:
         """
         Trains a Random Forest regressor to predict focus scores and extracts
         feature importances — revealing which factors most affect performance.
+
+        How it works:
+          - A Random Forest is an ensemble of decision trees.  Each tree
+            is trained on a random subset of the data and features.
+          - After fitting, sklearn exposes `feature_importances_`: the
+            average reduction in prediction error each feature provides
+            across all trees (Mean Decrease in Impurity).
+          - A higher importance % means that feature is a stronger
+            driver of whether a session scores well or poorly.
+
+        The R² score (coefficient of determination) indicates how well
+        the model fits the data: 1.0 = perfect, 0.0 = no better than
+        predicting the mean.  Because we evaluate on training data, a
+        high R² is expected — it confirms the model captured the
+        patterns, not that it would generalise to new users.
 
         Requires at least 5 sessions.
         """
@@ -452,9 +488,12 @@ class PatternAnalyzer:
             return {"error": "insufficient_data", "features": [],
                     "r2_score": None, "top_factor": None}
 
+        # 100 trees gives stable importance estimates while staying fast
+        # on small datasets.  random_state pins the result for reproducibility.
         model = RandomForestRegressor(n_estimators=100, random_state=42)
         model.fit(X, y)
 
+        # Pair each feature name with its importance and sort descending
         ranked = sorted(
             zip(_ML_FEATURES, model.feature_importances_),
             key=lambda x: x[1],
@@ -462,8 +501,8 @@ class PatternAnalyzer:
         )
         features = [
             {
-                "feature": feat,
-                "label": _ML_FEATURE_LABELS[feat],
+                "feature": feat,                    # internal key (e.g. "phone_distractions")
+                "label": _ML_FEATURE_LABELS[feat],  # display name (e.g. "Phone Distractions")
                 "importance": round(float(imp), 4),
                 "importance_pct": round(float(imp) * 100, 1),
             }
@@ -476,41 +515,64 @@ class PatternAnalyzer:
             "top_factor": features[0]["label"] if features else None,
         }
 
+    # ---- 2. Session clustering (K-Means) ----------------------------
+
     def ml_cluster_sessions(self, sessions: list, n_clusters: int = 3) -> dict:
         """
         Groups sessions into performance clusters using K-Means.
 
-        Each cluster is labelled by its average score: High Focus (>=85),
-        Moderate Focus (>=70), or Needs Improvement (<70).
+        How it works:
+          - Features + score are combined into a single matrix, then
+            standardised with StandardScaler (zero mean, unit variance)
+            so that no single feature dominates due to scale differences
+            (e.g. duration in seconds vs distraction counts).
+          - K-Means partitions sessions into `n_clusters` groups by
+            minimising within-cluster variance.  Each session is
+            assigned to the nearest centroid.
+          - Clusters are then labelled by their average score:
+                >= 85  →  "High Focus"
+                >= 70  →  "Moderate Focus"
+                <  70  →  "Needs Improvement"
 
-        Requires at least n_clusters * 2 sessions.
+        Requires at least n_clusters * 2 sessions so each cluster
+        can contain a meaningful number of members.
         """
         X, y = self._build_feature_matrix(sessions)
         if len(X) < n_clusters * 2:
             return {"error": "insufficient_data", "clusters": [],
                     "n_clusters": n_clusters}
 
+        # Append score as a clustering feature so sessions are grouped
+        # by both their inputs (time, distractions) AND their outcome.
         X_with_score = np.column_stack([X, y])
+
+        # Standardise: K-Means uses Euclidean distance, so features on
+        # different scales (duration ~3600 vs distractions ~2) would
+        # skew the grouping without normalisation.
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X_with_score)
 
+        # n_init=10 runs K-Means 10 times with different centroid seeds
+        # and keeps the best result, reducing sensitivity to initialisation.
         kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
         labels = kmeans.fit_predict(X_scaled)
 
+        # Build a profile summary for each cluster
         clusters = []
         for i in range(n_clusters):
-            mask = labels == i
+            mask = labels == i                      # boolean mask for this cluster's sessions
             cluster_scores = y[mask]
             cluster_X = X[mask]
             cluster_ids = [s["id"] for s, m in zip(sessions, mask) if m]
 
             avg_score = round(float(cluster_scores.mean()), 1)
-            avg_dur = round(float(cluster_X[:, 2].mean()) / 60, 1)
-            avg_hour = int(round(float(cluster_X[:, 0].mean())))
+            avg_dur = round(float(cluster_X[:, 2].mean()) / 60, 1)   # col 2 = duration → minutes
+            avg_hour = int(round(float(cluster_X[:, 0].mean())))      # col 0 = hour
             avg_distractions = round(
-                float(cluster_X[:, 3:].sum(axis=1).mean()), 1
+                float(cluster_X[:, 3:].sum(axis=1).mean()), 1         # cols 3-7 = distraction counts
             )
 
+            # Assign a human-readable label based on cluster quality
             if avg_score >= 85:
                 label = "High Focus"
             elif avg_score >= 70:
@@ -529,15 +591,30 @@ class PatternAnalyzer:
                 "session_ids": cluster_ids,
             })
 
+        # Present best-performing cluster first
         clusters.sort(key=lambda c: c["avg_score"], reverse=True)
         return {"clusters": clusters, "n_clusters": n_clusters}
+
+    # ---- 3. Score trend forecasting (Linear Regression) -------------
 
     def ml_forecast_trend(self, sessions: list) -> dict:
         """
         Fits a linear regression on scores over time to forecast trajectory.
 
-        Direction: "improving" if slope > 0.5, "declining" if < -0.5,
-        otherwise "stable".  Also projects the next 5 session scores.
+        How it works:
+          - X is the session index (0, 1, 2, …), y is the session score.
+          - A simple y = slope * x + intercept line is fitted.
+          - The slope tells us how many points the score changes per
+            session on average:
+                slope >  0.5  →  "improving"
+                slope < -0.5  →  "declining"
+                otherwise     →  "stable"
+          - The model then extrapolates 5 sessions into the future,
+            clamped to [0, 100].
+
+        R² here reflects how linear the score progression is — a low R²
+        doesn't mean the forecast is wrong, just that scores are noisy
+        and don't follow a clean trend line.
 
         Requires at least 3 sessions.
         """
@@ -546,16 +623,19 @@ class PatternAnalyzer:
             return {"error": "insufficient_data", "direction": None,
                     "predicted_next_5": []}
 
+        # Session index as the sole predictor (simple trend over time)
         X_idx = np.arange(len(y)).reshape(-1, 1)
         model = LinearRegression()
         model.fit(X_idx, y)
 
+        # slope = average score change per session
         slope = round(float(model.coef_[0]), 2)
         r2 = round(float(model.score(X_idx, y)), 3)
 
+        # Project scores for the next 5 hypothetical sessions
         future = np.arange(len(y), len(y) + 5).reshape(-1, 1)
         predictions = [
-            round(max(0, min(100, float(p))), 1)
+            round(max(0, min(100, float(p))), 1)  # clamp to valid score range
             for p in model.predict(future)
         ]
 
