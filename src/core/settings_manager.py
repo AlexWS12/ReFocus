@@ -19,6 +19,12 @@ def _deep_merge(defaults: dict, loaded: dict) -> dict:
     return merged
 
 
+def ensure_defaults() -> None:
+    """Write the default settings.json to disk if it does not already exist."""
+    if not _SETTINGS_PATH.exists():
+        save(dict(_DEFAULTS))
+
+
 def load() -> dict:
     """Read settings from disk, falling back to defaults for missing keys."""
     if _SETTINGS_PATH.exists():
