@@ -216,6 +216,7 @@ __marimo__/
 
 # Intelligence
 data.db
+settings.json
 # uv
 uv.lock
 

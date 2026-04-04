@@ -3,8 +3,10 @@ import math
 from enum import Enum
 try:
     from src.intelligence.database import get_database
+    from src.core import settings_manager
 except ImportError:
     from database import get_database
+    settings_manager = None
 
 class SessionState(Enum):
     READY = "ready"
@@ -62,6 +64,10 @@ class SessionManager:
         # not paused). Both are subtracted from wall-clock time in end_session().
         self.total_pause_duration = 0
         self.pause_start_time = None
+        # Snapshot of which distraction types are enabled for the current session.
+        # Loaded from settings.json at session start so mid-session setting changes
+        # don't alter a running session's tracking.
+        self.enabled_distractions: set[DistractionType] = set(DistractionType)
 
     def reset(self):
         # Resets all session state back to defaults, allowing the instance to be reused.
@@ -77,10 +83,14 @@ class SessionManager:
         # not paused). Both are subtracted from wall-clock time in end_session().
         self.total_pause_duration = 0
         self.pause_start_time = None
+        self.enabled_distractions = set(DistractionType)
 
     def start_session(self):
         if self.session_state != SessionState.READY:
             raise Exception("Session is already in progress or paused.")
+
+        if settings_manager is not None:
+            self.enabled_distractions = settings_manager.enabled_distractions()
 
         self.session_start_time = time.time()
         cursor = self.db.cursor()
@@ -118,6 +128,8 @@ class SessionManager:
         # duration_seconds: how long the distraction lasted in seconds
         if self.session_state != SessionState.IN_PROGRESS:
             raise Exception("Cannot log a distraction outside of an active session.")
+        if dtype not in self.enabled_distractions:
+            return
         self.distraction_events.append({
             "type": dtype,
             "time": duration_seconds, 
