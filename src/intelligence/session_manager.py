@@ -2,12 +2,7 @@ import json
 import time
 import math
 from enum import Enum
-try:
-    from src.intelligence.database import get_database
-    from src.core import settings_manager
-except ImportError:
-    from database import get_database
-    settings_manager = None
+
 
 class SessionState(Enum):
     READY = "ready"
@@ -24,6 +19,14 @@ class DistractionType(Enum):
     LEFT_DESK_DISTRACTION = "left_desk_distraction"
     APP_DISTRACTION = "app_distraction"
     IDLE_DISTRACTION = "idle_distraction"
+
+
+try:
+    from src.intelligence.database import get_database
+    from src.core import settings_manager
+except ImportError:
+    from database import get_database
+    settings_manager = None
 
 # Severity weights for each distraction type used in score calculation.
 # Higher value = bigger penalty per event and per second distracted.
@@ -236,7 +239,6 @@ class SessionManager:
         # ensures that if _enabled_types was never set (shouldn't happen), we fall
         # back to allowing everything rather than blocking everything.
         if self._enabled_types is not None and dtype not in self._enabled_types:
-        if dtype not in self.enabled_distractions:
             return
         self.distraction_events.append({
             "type": dtype,
