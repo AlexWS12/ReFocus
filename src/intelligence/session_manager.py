@@ -4,8 +4,10 @@ import math
 from enum import Enum
 try:
     from src.intelligence.database import get_database
+    from src.core import settings_manager
 except ImportError:
     from database import get_database
+    settings_manager = None
 
 class SessionState(Enum):
     READY = "ready"
@@ -156,6 +158,10 @@ class SessionManager:
         #      types were active when analyzing historical data
         # None when no session is active (READY or after reset()).
         self._enabled_types = None
+        # Snapshot of which distraction types are enabled for the current session.
+        # Loaded from settings.json at session start so mid-session setting changes
+        # don't alter a running session's tracking.
+        self.enabled_distractions: set[DistractionType] = set(DistractionType)
 
     def reset(self):
         # Resets all session state back to defaults, allowing the instance to be reused.
@@ -174,6 +180,7 @@ class SessionManager:
         # Clear the frozen config snapshot — it belonged to the ended session.
         # A fresh snapshot is taken in the next start_session() call.
         self._enabled_types = None
+        self.enabled_distractions = set(DistractionType)
 
     def start_session(self):
         if self.session_state != SessionState.READY:
@@ -183,6 +190,8 @@ class SessionManager:
         # This snapshot is used to gate log_distraction() and stored in the
         # session row so pattern analysis knows which types were active.
         self._enabled_types = self.user_config.get_enabled_types()
+        if settings_manager is not None:
+            self.enabled_distractions = settings_manager.enabled_distractions()
 
         self.session_start_time = time.time()
         cursor = self.db.cursor()
@@ -227,6 +236,7 @@ class SessionManager:
         # ensures that if _enabled_types was never set (shouldn't happen), we fall
         # back to allowing everything rather than blocking everything.
         if self._enabled_types is not None and dtype not in self._enabled_types:
+        if dtype not in self.enabled_distractions:
             return
         self.distraction_events.append({
             "type": dtype,
