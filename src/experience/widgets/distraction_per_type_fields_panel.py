@@ -1,6 +1,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QLineEdit, QVBoxLayout
 
+from src.core import settings_manager
 from src.experience.widgets.centered_label import CenteredLabel
 from src.experience.widgets.distraction_list import DISTRACTION_LABELS
 from src.intelligence.session_manager import DistractionType
@@ -41,11 +42,21 @@ class DistractionPerTypeFieldsPanel(QFrame):
 
 class DistractionImportancePanel(DistractionPerTypeFieldsPanel):
     def __init__(self, parent=None):
-        super().__init__("Distraction importance", "Importance", parent)
+        super().__init__("Distraction importance", "0.0 – 1.0", parent)
+        saved = settings_manager.distraction_weights()
+        for dtype, field in self.fields.items():
+            field.setText(str(saved[dtype]))
 
-    @property
-    def importance_fields(self) -> dict[DistractionType, QLineEdit]:
-        return self.fields
+    def get_weights(self) -> dict[DistractionType, float]:
+        """Return current field values as floats, falling back to saved defaults."""
+        saved = settings_manager.distraction_weights()
+        result: dict[DistractionType, float] = {}
+        for dtype, field in self.fields.items():
+            try:
+                result[dtype] = float(field.text())
+            except (ValueError, TypeError):
+                result[dtype] = saved[dtype]
+        return result
 
 
 class DistractionThresholdPanel(DistractionPerTypeFieldsPanel):

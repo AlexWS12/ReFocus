@@ -5,8 +5,20 @@ from src.intelligence.session_manager import DistractionType
 
 _SETTINGS_PATH = Path(__file__).resolve().parent.parent.parent / "settings.json"
 
+# Canonical default severity weights for each distraction type.
+# Higher value = bigger penalty per event and per second distracted.
+# Phone is the most penalized (intentional, high-impact) and idle the least (ambiguous).
+_DEFAULT_WEIGHTS: dict[str, float] = {
+    DistractionType.PHONE_DISTRACTION.value:     1.00,
+    DistractionType.APP_DISTRACTION.value:       0.75,
+    DistractionType.LEFT_DESK_DISTRACTION.value: 0.60,
+    DistractionType.LOOK_AWAY_DISTRACTION.value: 0.30,
+    DistractionType.IDLE_DISTRACTION.value:      0.15,
+}
+
 _DEFAULTS = {
     "enabled_distractions": [dt.value for dt in DistractionType],
+    "distraction_weights": dict(_DEFAULT_WEIGHTS),
 }
 
 
@@ -52,4 +64,20 @@ def enabled_distractions() -> set[DistractionType]:
             result.add(DistractionType(value))
         except ValueError:
             continue
+    return result
+
+
+def distraction_weights() -> dict[DistractionType, float]:
+    """Load settings and return per-type severity weights.
+
+    Falls back to _DEFAULT_WEIGHTS for any missing or invalid entries
+    so calculate_score always has a complete map.
+    """
+    raw = load().get("distraction_weights", {})
+    result: dict[DistractionType, float] = {}
+    for dt in DistractionType:
+        try:
+            result[dt] = float(raw[dt.value])
+        except (KeyError, ValueError, TypeError):
+            result[dt] = _DEFAULT_WEIGHTS.get(dt.value, 0)
     return result

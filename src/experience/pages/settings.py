@@ -53,6 +53,8 @@ class Settings(QWidget):
         settings = settings_manager.load()
         enabled = self.distraction_toggles.get_enabled_types()
         settings["enabled_distractions"] = [dt.value for dt in enabled]
+        weights = self.distraction_importance_panel.get_weights()
+        settings["distraction_weights"] = {dt.value: w for dt, w in weights.items()}
         settings_manager.save(settings)
 
     def darkmode(self):
