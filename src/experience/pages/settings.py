@@ -34,12 +34,24 @@ class Settings(QWidget):
         self.distraction_count_seconds_panel = DistractionCountSecondsPanel(self)
         self.grid_layout.addWidget(self.distraction_count_seconds_panel, 1, 1)
 
+        self.app = QApplication.instance()
+
+        calibration_row = QHBoxLayout()
+        self.calibrate_phone_btn = Button("Run Phone Calibration")
+        self.calibrate_phone_btn.clicked.connect(self.calibrate_phone)
+        calibration_row.addWidget(self.calibrate_phone_btn)
+
+        self.calibrate_gaze_btn = Button("Run Gaze Calibration")
+        self.calibrate_gaze_btn.clicked.connect(self.calibrate_gaze)
+        calibration_row.addWidget(self.calibrate_gaze_btn)
+
+        self.layout.addLayout(calibration_row)
+
         self.layout.addStretch(1)
 
         button_row = QHBoxLayout()
 
         self.dark_mode = Button("Change Theme")
-        self.app = QApplication.instance()
         button_row.addWidget(self.dark_mode)
         self.dark_mode.clicked.connect(self.darkmode)
 
@@ -57,6 +69,28 @@ class Settings(QWidget):
         settings["distraction_weights"] = {dt.value: w for dt, w in weights.items()}
         settings["detection_thresholds"] = self.detection_thresholds_panel.get_thresholds()
         settings_manager.save(settings)
+
+    def calibrate_phone(self):
+        self.calibrate_phone_btn.setEnabled(False)
+        self.calibrate_gaze_btn.setEnabled(False)
+        self.app.vision_manager.run_phone_calibration(target_detections=15)
+        self._refresh_thresholds()
+        self.calibrate_phone_btn.setEnabled(True)
+        self.calibrate_gaze_btn.setEnabled(True)
+
+    def calibrate_gaze(self):
+        self.calibrate_phone_btn.setEnabled(False)
+        self.calibrate_gaze_btn.setEnabled(False)
+        self.app.vision_manager.run_gaze_calibration()
+        self.calibrate_phone_btn.setEnabled(True)
+        self.calibrate_gaze_btn.setEnabled(True)
+
+    def _refresh_thresholds(self):
+        """Reload detection threshold fields from settings.json after calibration."""
+        saved = settings_manager.detection_thresholds()
+        for key, field in self.detection_thresholds_panel.fields.items():
+            value = saved.get(key)
+            field.setText(str(value) if value is not None else "")
 
     def darkmode(self):
         if self.app.style_path == "dark.qss":
