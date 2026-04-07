@@ -32,7 +32,7 @@ class DistractionPerTypeFieldsPanel(QFrame):
             name = QLabel(label_text, self)
             field = QLineEdit(self)
             field.setPlaceholderText(field_placeholder)
-            field.setFixedWidth(88)
+            field.setFixedWidth(110)
 
             row.addWidget(name, stretch=1)
             row.addWidget(field, stretch=0)

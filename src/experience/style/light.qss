@@ -117,6 +117,13 @@ QPushButton#stopSessionButton:hover {
     background-color: #c0392b;
 }
 
+QLineEdit {
+    background-color: #ffffff;
+    color: rgb(34, 34, 34);
+    border: 1px solid #dde3f0;
+    border-radius: 6px;
+}
+
 QLabel#xpLabel,
 QLabel#coinLabel {
     color: #f5a623;
