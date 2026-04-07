@@ -62,10 +62,10 @@ class Session(QWidget):
         live_layout.addLayout(content_layout)
 
         self.vision_stream = VisionStream()
-        content_layout.addWidget(self.vision_stream, stretch=3)
+        content_layout.addWidget(self.vision_stream, stretch=1)
 
         self.distraction_list = DistractionList()
-        content_layout.addWidget(self.distraction_list, stretch=2)
+        content_layout.addWidget(self.distraction_list, stretch=1)
 
         self.stop_btn = Button("Stop Session")
         self.stop_btn.setObjectName("stopSessionButton")

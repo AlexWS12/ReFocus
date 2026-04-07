@@ -124,7 +124,7 @@ class SessionReport(QWidget):
         score_row.setAlignment(Qt.AlignCenter)
         score_row.addWidget(_ScoreRing(score))
         self._root.addLayout(score_row)
-        self._root.addSpacing(12)
+        self._root.addSpacing(32)
 
         # --- Key stats grid ---
         grid = QGridLayout()
