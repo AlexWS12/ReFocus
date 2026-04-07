@@ -37,10 +37,10 @@ def test_create_mock_database_seeds_expected_data(tmp_path):
     finally:
         conn.close()
 
-    assert session_count == 7
-    assert event_count == 15
+    assert session_count == 20
+    assert event_count == 68
     assert achievement_count == 10
-    assert user_stats == (7, 7, 177, 770, "fox")
+    assert user_stats == (19, 20, 497, 2085, "fox")
     assert latest_session == (98, 95.0)
 
 

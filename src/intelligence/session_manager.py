@@ -1,12 +1,8 @@
+import json
 import time
 import math
 from enum import Enum
-try:
-    from src.intelligence.database import get_database
-    from src.core import settings_manager
-except ImportError:
-    from database import get_database
-    settings_manager = None
+
 
 class SessionState(Enum):
     READY = "ready"
@@ -26,6 +22,108 @@ class DistractionType(Enum):
     IDLE_DISTRACTION = "idle_distraction"
 
 
+try:
+    from src.intelligence.database import get_database
+    from src.core import settings_manager
+except ImportError:
+    from database import get_database
+    settings_manager = None
+
+# Severity weights for each distraction type used in score calculation.
+# Higher value = bigger penalty per event and per second distracted.
+# Phone is the most penalized (intentional, high-impact) and idle the least (ambiguous).
+# If a new DistractionType is added above, a corresponding entry must be added here.
+SEVERITY = {
+    DistractionType.PHONE_DISTRACTION:     1.00,
+    DistractionType.APP_DISTRACTION:       0.75,
+    DistractionType.LEFT_DESK_DISTRACTION: 0.60,
+    DistractionType.LOOK_AWAY_DISTRACTION: 0.30,
+    DistractionType.IDLE_DISTRACTION:      0.15,
+}
+
+
+# Maps each DistractionType enum value to its corresponding boolean column
+# name in the user_settings table.  Used by UserConfig to translate between
+# the Python enum world and the SQL schema.
+# If a new DistractionType is added, a matching entry must be added here
+# AND a new column must be added to the user_settings table in database.py.
+_DTYPE_TO_SETTING_COL = {
+    DistractionType.PHONE_DISTRACTION:     "phone_detection_enabled",
+    DistractionType.LOOK_AWAY_DISTRACTION: "look_away_detection_enabled",
+    DistractionType.LEFT_DESK_DISTRACTION: "left_desk_detection_enabled",
+    DistractionType.APP_DISTRACTION:       "app_detection_enabled",
+    DistractionType.IDLE_DISTRACTION:      "idle_detection_enabled",
+}
+
+
+class UserConfig:
+    """Reads and writes per-distraction-type toggles from the user_settings table.
+
+    This class is the single source of truth for which distraction types are
+    currently enabled.  SessionManager reads from it at session start to freeze
+    a snapshot; the settings UI writes to it when the user flips a toggle.
+
+    The class is intentionally co-located with SessionManager rather than in a
+    separate file because it is small (~40 lines), tightly coupled to
+    DistractionType and get_database(), and only consumed by SessionManager.
+    """
+
+    def __init__(self):
+        self.db = get_database()
+
+    def get_enabled_types(self) -> set:
+        """Returns the set of DistractionTypes currently enabled in user settings.
+
+        Reads the singleton user_settings row and checks each boolean column.
+        A column value of 1 (truthy) means the type is enabled.
+        Used by SessionManager.start_session() to freeze the config snapshot.
+        """
+        cursor = self.db.cursor()
+        cursor.execute("SELECT * FROM user_settings WHERE id = 1")
+        row = cursor.fetchone()
+        return {
+            dtype for dtype, col in _DTYPE_TO_SETTING_COL.items()
+            if row[col]
+        }
+
+    def is_enabled(self, dtype: DistractionType) -> bool:
+        """Check whether a single distraction type is currently enabled."""
+        col = _DTYPE_TO_SETTING_COL[dtype]
+        cursor = self.db.cursor()
+        cursor.execute(f"SELECT {col} FROM user_settings WHERE id = 1")
+        return bool(cursor.fetchone()[col])
+
+    def set_enabled(self, dtype: DistractionType, enabled: bool) -> None:
+        """Toggle a single distraction type on or off.
+
+        Writes to the DB immediately and commits, so the change is persisted
+        even if the app crashes before the next explicit commit.
+        The column name is safe from injection because it comes from the
+        hardcoded _DTYPE_TO_SETTING_COL mapping, never from user input.
+        """
+        col = _DTYPE_TO_SETTING_COL[dtype]
+        now_str = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())
+        cursor = self.db.cursor()
+        cursor.execute(
+            f"UPDATE user_settings SET {col} = ?, updated_at = ? WHERE id = 1",
+            (1 if enabled else 0, now_str)
+        )
+        self.db.commit()
+
+    def get_all_settings(self) -> dict:
+        """Returns {DistractionType: bool} for every distraction type.
+
+        Useful for populating a settings UI with the current state of all toggles.
+        """
+        cursor = self.db.cursor()
+        cursor.execute("SELECT * FROM user_settings WHERE id = 1")
+        row = cursor.fetchone()
+        return {
+            dtype: bool(row[col])
+            for dtype, col in _DTYPE_TO_SETTING_COL.items()
+        }
+
+
 def _calculate_level(exp):
     # Maps cumulative XP to a level using ceil(exp / 110).
     # Calibrated so that exp=770 → level=7 (matches mock data; 770/110 = 7.0 exactly).
@@ -40,6 +138,9 @@ def _calculate_level(exp):
 class SessionManager:
     def __init__(self):
         self.db = get_database()
+        # UserConfig provides read/write access to the user_settings table.
+        # Used in start_session() to snapshot which distraction types are active.
+        self.user_config = UserConfig()
         self.current_session_id = None
         self.session_state = SessionState.READY
         self.session_start_time = None
@@ -53,6 +154,14 @@ class SessionManager:
         # not paused). Both are subtracted from wall-clock time in end_session().
         self.total_pause_duration = 0
         self.pause_start_time = None
+        # Frozen snapshot of enabled distraction types for the active session.
+        # Set in start_session() by reading UserConfig, then used to:
+        #   1. Gate log_distraction() — disabled types are silently discarded
+        #   2. Gate calculate_score() — disabled types never contribute penalties
+        #   3. Store as JSON in the sessions row — so PatternAnalyzer knows which
+        #      types were active when analyzing historical data
+        # None when no session is active (READY or after reset()).
+        self._enabled_types = None
         # Snapshot of which distraction types are enabled for the current session.
         # Loaded from settings.json at session start so mid-session setting changes
         # don't alter a running session's tracking.
@@ -79,6 +188,9 @@ class SessionManager:
         # not paused). Both are subtracted from wall-clock time in end_session().
         self.total_pause_duration = 0
         self.pause_start_time = None
+        # Clear the frozen config snapshot — it belonged to the ended session.
+        # A fresh snapshot is taken in the next start_session() call.
+        self._enabled_types = None
         self.enabled_distractions = set(DistractionType)
         self.severity_weights = (
             settings_manager.distraction_weights() if settings_manager is not None
@@ -89,6 +201,10 @@ class SessionManager:
         if self.session_state != SessionState.READY:
             raise Exception("Session is already in progress or paused.")
 
+        # Freeze the user's current distraction settings for this session.
+        # This snapshot is used to gate log_distraction() and stored in the
+        # session row so pattern analysis knows which types were active.
+        self._enabled_types = self.user_config.get_enabled_types()
         if settings_manager is not None:
             self.enabled_distractions = settings_manager.enabled_distractions()
             self.severity_weights = settings_manager.distraction_weights()
@@ -129,7 +245,13 @@ class SessionManager:
         # duration_seconds: how long the distraction lasted in seconds
         if self.session_state != SessionState.IN_PROGRESS:
             raise Exception("Cannot log a distraction outside of an active session.")
-        if dtype not in self.enabled_distractions:
+        # Silently discard events for distraction types the user has disabled.
+        # The Camera still runs its detectors (YOLO, gaze tracker, etc.) and calls
+        # this method for every resolved event — filtering happens here so we don't
+        # need to touch the complex detection pipeline.  The "is not None" guard
+        # ensures that if _enabled_types was never set (shouldn't happen), we fall
+        # back to allowing everything rather than blocking everything.
+        if self._enabled_types is not None and dtype not in self._enabled_types:
             return
         self.distraction_events.append({
             "type": dtype,
@@ -193,6 +315,17 @@ class SessionManager:
         # Calculate XP and coins earned for this session based on score and duration.
         points_earned, coins_earned = self._calculate_rewards(score, duration)
 
+        # JSON snapshot of which distraction types were active for this session.
+        # Stored as a sorted array of DistractionType string values, e.g.:
+        #   '["app_distraction", "left_desk_distraction", "phone_distraction"]'
+        # PatternAnalyzer reads this column to decide which ML features to include:
+        # only types that were enabled for ALL sessions in the dataset are used as
+        # features, so disabled-type zeros don't pollute the model.
+        # NULL in legacy sessions (recorded before this feature) means "all types enabled".
+        enabled_json = json.dumps(
+            sorted(dt.value for dt in self._enabled_types)
+        ) if self._enabled_types is not None else None
+
         # Write all populated columns back to the session row in one update,
         # including the newly computed points_earned and coins_earned.
         cursor = self.db.cursor()
@@ -204,7 +337,8 @@ class SessionManager:
                 phone_distractions=?, look_away_distractions=?,
                 left_desk_distractions=?, app_distractions=?, idle_distractions=?,
                 focus_percentage=?,
-                points_earned=?, coins_earned=?
+                points_earned=?, coins_earned=?,
+                enabled_distractions=?
             WHERE id=?
         ''', (
             time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(self.session_end_time)),
@@ -214,6 +348,7 @@ class SessionManager:
             phone_count, look_away_count, left_desk_count, app_count, idle_count,
             focus_percentage,
             points_earned, coins_earned,
+            enabled_json,
             self.current_session_id
         ))
 
@@ -334,6 +469,13 @@ class SessionManager:
         penalty = 0
         if distraction_data:
             for dtype, data in distraction_data.items():
+                # Skip disabled types so they never penalize the score.
+                # This is technically redundant with the gate in log_distraction()
+                # (disabled events are never appended), but serves as a safety net:
+                # if calculate_score() is ever called directly with manually-constructed
+                # distraction_data (e.g. in tests), disabled types still won't penalize.
+                if self._enabled_types is not None and dtype not in self._enabled_types:
+                    continue
                 count = data.get("count", 0)
                 time_spent = data.get("time", 0)
                 if count == 0 and time_spent == 0:
@@ -395,3 +537,4 @@ class SessionManager:
         }
 
         return report
+    

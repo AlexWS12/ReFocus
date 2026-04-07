@@ -23,6 +23,8 @@ class Database:
         self._create_user_stats_table()
         self._create_events_table()
         self._create_achievements_table()
+        self._create_user_settings_table() # New table for user settings to control distraction type toggles
+        self._migrate_sessions_table()
         self.conn.commit()
 
 
@@ -161,6 +163,72 @@ class Database:
                 target INTEGER DEFAULT 1
             )
         ''')
+
+    def _create_user_settings_table(self):
+        cursor = self._get_connection().cursor()
+
+        # Create a USER_SETTINGS table to store per-distraction-type toggles.
+        # Follows the same singleton pattern as user_stats (id forced to 1).
+        #
+        # Each boolean column controls whether the corresponding distraction type
+        # is tracked during study sessions:
+        #   1 (default) = enabled  — the distraction will be detected, logged, and
+        #                             penalized in score calculation.
+        #   0           = disabled — the Camera still runs its detectors, but
+        #                             SessionManager.log_distraction() silently
+        #                             discards events of this type.
+        #
+        # All default to 1 so existing behavior is preserved until the user
+        # explicitly disables a type from the settings UI.
+        #
+        # id                           - enforced singleton row (always 1)
+        # phone_detection_enabled      - toggle for phone-use distractions
+        # look_away_detection_enabled  - toggle for look-away distractions
+        # left_desk_detection_enabled  - toggle for left-desk distractions
+        # app_detection_enabled        - toggle for app-switch distractions
+        # idle_detection_enabled       - toggle for idle/inactivity distractions
+        # updated_at                   - ISO 8601 timestamp of last settings change
+
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                phone_detection_enabled INTEGER DEFAULT 1,
+                look_away_detection_enabled INTEGER DEFAULT 1,
+                left_desk_detection_enabled INTEGER DEFAULT 1,
+                app_detection_enabled INTEGER DEFAULT 1,
+                idle_detection_enabled INTEGER DEFAULT 1,
+                updated_at TEXT
+            )
+        ''')
+        # Seed the singleton row so reads always find a record (same as user_stats)
+        cursor.execute("INSERT OR IGNORE INTO user_settings (id) VALUES (1)")
+
+    def _migrate_sessions_table(self):
+        # Schema migration: add the enabled_distractions column to the existing
+        # sessions table.  This column stores a JSON array of the distraction type
+        # string values that were enabled when the session was recorded, e.g.:
+        #   '["app_distraction", "left_desk_distraction", "phone_distraction"]'
+        #
+        # Why this column is needed:
+        #   When a user disables a distraction type and then records a session,
+        #   the disabled type's count will naturally be 0.  Without this column,
+        #   PatternAnalyzer cannot tell whether a 0 means "the user was perfectly
+        #   focused" or "detection was turned off."  The snapshot resolves that
+        #   ambiguity so ML features can exclude disabled types from training data.
+        #
+        # Legacy sessions (recorded before this migration) will have NULL in this
+        # column, which is interpreted as "all five types were enabled."
+        #
+        # ALTER TABLE is wrapped in try/except because SQLite does not support
+        # IF NOT EXISTS for columns — if the migration has already run, the
+        # duplicate ALTER will raise an OperationalError, which we silently ignore.
+        cursor = self._get_connection().cursor()
+        try:
+            cursor.execute('''
+                ALTER TABLE sessions ADD COLUMN enabled_distractions TEXT
+            ''')
+        except Exception:
+            pass  # Column already exists from a previous migration run
 
     # Close the database connection when done
     def close(self):
