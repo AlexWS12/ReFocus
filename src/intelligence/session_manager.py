@@ -394,4 +394,14 @@ class SessionManager:
             "coins_earned":           session_data["coins_earned"],
         }
 
+        cursor.execute('''
+            SELECT event_type, timestamp, duration
+            FROM events WHERE session_id = ?
+            ORDER BY timestamp ASC
+        ''', (self.current_session_id,))
+        report["events_timeline"] = [
+            {"type": row["event_type"], "timestamp": row["timestamp"], "duration": row["duration"]}
+            for row in cursor.fetchall()
+        ]
+
         return report

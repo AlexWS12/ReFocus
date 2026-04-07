@@ -14,7 +14,7 @@ After that threshold is met, results are meaningful to refresh every 3 sessions.
 """
 
 from datetime import datetime
-from database import get_database
+from src.intelligence.database import get_database
 
 
 MIN_SESSIONS_REQUIRED = 10
@@ -317,6 +317,7 @@ class PatternAnalyzer:
         """
         if not sessions:
             return {
+                "scores":      [],
                 "rolling_avg": [],
                 "recent_avg":  None,
                 "overall_avg": None,
@@ -345,6 +346,7 @@ class PatternAnalyzer:
             trend = "stable"
 
         return {
+            "scores":      scores,
             "rolling_avg": rolling,
             "recent_avg":  recent_avg,
             "overall_avg": overall_avg,
