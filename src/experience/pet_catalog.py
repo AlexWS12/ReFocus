@@ -11,12 +11,12 @@ PET_CATALOG: dict[str, dict] = {
     "dog": {
         "name": "Pup",
         "sprite": str(_STATIC / "pets" / "dog" / "Dog.png"),
-        "cost": 0,
+        "cost": 10,
     },
     "frog": {
         "name": "Frog",
         "sprite": str(_STATIC / "pets" / "frog" / "Frog.png"),
-        "cost": 0,
+        "cost": 5,
     },
 }
 
