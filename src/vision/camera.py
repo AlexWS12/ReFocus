@@ -125,12 +125,13 @@ class Camera:
         self.few_shot_bundle_path = _get_phone_calibration_cls().get_few_shot_bundle_path()
         self.calibrated = False  # True after a successful phone calibration run
 
-        # Frame-skip controls: YOLO only runs every Nth frame.
+        # Frame-skip controls: YOLO and MediaPipe both run every Nth frame.
         # ByteTrack maintains bounding-box continuity on skipped frames, so
         # detections stay smooth without paying inference cost every frame.
-        self.yolo_frame_skip = 3       # Run YOLO on frame 0, 3, 6, … (tune up for speed, down for accuracy)
-        self._yolo_frame_counter = 0   # Counts total frames seen; used to decide when to re-run YOLO
+        self.frame_skip = 3            # Run detectors on frame 0, 3, 6, … (tune up for speed, down for accuracy)
+        self._frame_counter = 0        # Counts total frames seen; used to decide when to re-run detectors
         self._last_yolo_results = None # Cached result list reused on skipped frames
+        self._last_gaze_annotated = None  # Cached gaze overlay reused on skipped frames
 
         # Distraction tracking: each event is defined by a start time and a
         # "last seen" time.  When the trigger disappears, a cooldown window
@@ -388,11 +389,16 @@ class Camera:
         else:
             guide_x1 = guide_y1 = guide_x2 = guide_y2 = None
 
+        # --- Detector frame-skip decision ---
+        # Both YOLO and MediaPipe run on the same cadence; cached results fill skipped frames.
+        run_detectors = self._frame_counter % self.frame_skip == 0 or self._last_yolo_results is None
+        self._frame_counter += 1
+
         # --- YOLO detection (frame-skipped) ---
         # stream=True yields results lazily, reducing peak memory allocation.
         # On skipped frames the cached result is reused; ByteTrack maintains continuity.
         yolo_conf = self.yolo_conf_threshold or self.detection_params.get("conf", 0.35)
-        if self._yolo_frame_counter % self.yolo_frame_skip == 0 or self._last_yolo_results is None:
+        if run_detectors:
             self._last_yolo_results = list(
                 self.model(
                     frame,
@@ -403,7 +409,6 @@ class Camera:
                     stream=True,  # Lazy generator — reduces peak memory vs returning a list directly
                 )
             )
-        self._yolo_frame_counter += 1
 
         # --- Spatial + appearance filtering; pick best candidate ---
         best_coords = None
@@ -487,9 +492,12 @@ class Camera:
                 2,
             )
 
-        # --- Eye / gaze tracking ---
-        # gazeTracker internally throttles to ~5 Hz; on skipped frames it returns the cached overlay
-        annotated = self.eye_tracker.track_eyes(annotated)
+        # --- Eye / gaze tracking (frame-skipped) ---
+        # On active frames, run MediaPipe and cache the result.
+        # On skipped frames, reuse the last annotated overlay.
+        if run_detectors or self._last_gaze_annotated is None:
+            self._last_gaze_annotated = self.eye_tracker.track_eyes(annotated)
+        annotated = self._last_gaze_annotated
 
         # --- Distraction event logging ---
         # Fallback detections are intentionally visual-only; they help with overlay
