@@ -12,9 +12,6 @@ dependencies = [
     "pyside6>=6.10.2",
     "questionary>=2.1.1",
     "rich>=14.1.0",
-    "torch>=2.10.0",
-    "timm>=0.9.0",           # required by Grounding DINO backbone
-    "transformers>=5.3.0",
     "ultralytics>=8.3", #YOLO V11
     "scikit-learn>=1.6",
 ]
