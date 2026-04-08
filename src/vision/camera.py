@@ -101,16 +101,17 @@ class Camera:
     reused in between via ByteTrack continuity.
     """
 
-    def __init__(self, model_path="yolo26n.pt", session_manager=None):
+    def __init__(self, model_path="yolo26n.pt", session_manager=None, camera_index: int = 0):
         """Initialise camera, YOLO model, and eye tracker.
 
         Args:
             session_manager: Optional SessionManager instance. When provided,
                 resolved phone and look-away events are logged via log_distraction().
+            camera_index: Which video-capture device to open (default 0).
         """
         # YOLO stays in __init__ so heavy model load happens only when camera runtime starts.
         self.model = _get_yolo_cls()(model_path)
-        self.cap = cv.VideoCapture(0)  # Open default webcam (index 0)
+        self.cap = cv.VideoCapture(camera_index)
         self.eye_tracker = _get_gaze_tracker_cls()()
         self.detection_params = {}               # Populated exclusively from the calibration bundle
         self.few_shot_signatures = []            # Appearance exemplars saved during phone calibration

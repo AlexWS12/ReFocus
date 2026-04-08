@@ -584,11 +584,12 @@ class PhoneCalibration:
             if key == ord('q'):
                 return "quit"
 
-    def run_calibration(self, target_detections: int = 15) -> dict:
+    def run_calibration(self, target_detections: int = 15, camera_index: int = 0) -> dict:
         """
         Interactive multi-phase calibration with auto-start and clear rotation prompts.
         """
-        cap = cv2.VideoCapture(0)
+        self._camera_index = camera_index
+        cap = cv2.VideoCapture(camera_index)
         if not cap.isOpened():
             return {"error": "Cannot open camera"}
 
@@ -948,7 +949,7 @@ class PhoneCalibration:
         # [INTELLIGENCE TEAM] Detection here runs with the newly computed conf_threshold
         # so users see exactly the sensitivity the runtime pipeline will use.
         if not cap.isOpened():
-            cap = cv2.VideoCapture(0)
+            cap = cv2.VideoCapture(getattr(self, '_camera_index', 0))
         
         conf_threshold = self.calibration_data["optimal_conf_threshold"]  # Threshold chosen by _analyze_calibration().
         validation_duration = 10  # seconds the user gets to verify the result before auto-accept.

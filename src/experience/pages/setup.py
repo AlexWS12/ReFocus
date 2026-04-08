@@ -1,7 +1,8 @@
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QLabel
 from src.experience.widgets.centered_label import CenteredLabel
 from src.experience.button import Button
 from src.core.qApplication import QApplication
+from src.core import settings_manager
 from src.experience.widgets.vision_stream import VisionStream
 
 class Setup(QWidget):
@@ -14,6 +15,14 @@ class Setup(QWidget):
         self.layout = QVBoxLayout()
         self.setLayout(self.layout)
 
+        # Camera selector
+        camera_layout = QHBoxLayout()
+        camera_label = QLabel("Camera:")
+        self.camera_combo = QComboBox()
+        self.camera_combo.currentIndexChanged.connect(self._on_camera_changed)
+        camera_layout.addWidget(camera_label)
+        camera_layout.addWidget(self.camera_combo, 1)
+        self.layout.addLayout(camera_layout)
 
         self.vision_stream = VisionStream()
         self.layout.addWidget(self.vision_stream)
@@ -36,11 +45,35 @@ class Setup(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        self._refresh_camera_list()
         self.vision_stream.start_stream()
 
     def hideEvent(self, event):
         self.vision_stream.stop_stream()
         super().hideEvent(event)
+
+    def _refresh_camera_list(self):
+        """Populate the camera dropdown with available devices."""
+        self.camera_combo.blockSignals(True)
+        self.camera_combo.clear()
+        cameras = settings_manager.available_cameras()
+        saved_index = settings_manager.camera_index()
+        select = 0
+        for i, cam in enumerate(cameras):
+            self.camera_combo.addItem(cam["name"], cam["index"])
+            if cam["index"] == saved_index:
+                select = i
+        self.camera_combo.setCurrentIndex(select)
+        self.camera_combo.blockSignals(False)
+
+    def _on_camera_changed(self, combo_index: int):
+        """Save the chosen camera and restart the preview stream."""
+        if combo_index < 0:
+            return
+        device_index = self.camera_combo.itemData(combo_index)
+        settings_manager.set_camera_index(device_index)
+        self.vision_stream.stop_stream()
+        self.vision_stream.start_stream()
 
     def calibrate_phone_detection(self):
         self.calibrate_phone_btn.setEnabled(False)

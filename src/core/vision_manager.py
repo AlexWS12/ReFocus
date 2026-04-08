@@ -1,5 +1,6 @@
 from PySide6.QtCore import QObject, QTimer, Signal
 
+from src.core import settings_manager
 from src.vision.camera import Camera
 from src.vision.detectors.phone_calibration import PhoneCalibration
 from src.vision.Trackers.gaze_calibration import GazeCalibrator
@@ -38,7 +39,7 @@ class VisionManager(QObject):
         if self._session_active:
             return
         if self._camera is None:
-            self._camera = Camera()
+            self._camera = Camera(camera_index=settings_manager.camera_index())
         if not self._timer.isActive():
             self._timer.start(30)
             self.stream_state_changed.emit(True)
@@ -57,7 +58,7 @@ class VisionManager(QObject):
         """Start the camera with distraction logging for an active study session."""
         self._force_stop()
         self._session_active = True
-        self._camera = Camera(session_manager=session_manager)
+        self._camera = Camera(session_manager=session_manager, camera_index=settings_manager.camera_index())
         self._timer.start(30)
         self.stream_state_changed.emit(True)
 
@@ -96,7 +97,7 @@ class VisionManager(QObject):
         if was_running:
             self._force_stop()
         try:
-            return PhoneCalibration().run_calibration(target_detections=target_detections)
+            return PhoneCalibration().run_calibration(target_detections=target_detections, camera_index=settings_manager.camera_index())
         finally:
             if was_running:
                 self.start()
@@ -106,7 +107,7 @@ class VisionManager(QObject):
         if was_running:
             self._force_stop()
         try:
-            return GazeCalibrator().run()
+            return GazeCalibrator().run(camera_index=settings_manager.camera_index())
         finally:
             if was_running:
                 self.start()

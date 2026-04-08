@@ -38,9 +38,9 @@ class GazeCalibrator:
         cv.line(frame, (tx - 16, ty), (tx + 16, ty), (0, 255, 255), 2)
         cv.line(frame, (tx, ty - 16), (tx, ty + 16), (0, 255, 255), 2)
 
-    def run(self) -> dict:
+    def run(self, camera_index: int = 0) -> dict:
         """Guide the user through center + corner targets and persist a calibration profile."""
-        cap = cv.VideoCapture(0)
+        cap = cv.VideoCapture(camera_index)
         if not cap.isOpened():
             return {"success": False, "message": "Cannot open camera"}
 

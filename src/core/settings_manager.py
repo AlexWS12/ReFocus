@@ -32,6 +32,7 @@ _DEFAULTS = {
     "enabled_distractions": [dt.value for dt in DistractionType],
     "distraction_weights": dict(_DEFAULT_WEIGHTS),
     "detection_thresholds": dict(_DEFAULT_DETECTION_THRESHOLDS),
+    "camera_index": 0,
 }
 
 
@@ -98,6 +99,39 @@ def detection_thresholds() -> dict[str, float | None]:
             except (ValueError, TypeError):
                 result[key] = default
     return result
+
+
+def camera_index() -> int:
+    """Return the selected camera device index."""
+    val = load().get("camera_index", 0)
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return 0
+
+
+def set_camera_index(index: int) -> None:
+    """Persist the chosen camera device index."""
+    settings = load()
+    settings["camera_index"] = index
+    save(settings)
+
+
+def available_cameras(max_check: int = 8) -> list[dict]:
+    """Probe for available camera devices and return a list of {index, name}.
+
+    OpenCV does not expose device names cross-platform, so names are
+    generated as 'Camera 0', 'Camera 1', etc.
+    """
+    import cv2 as cv
+
+    cameras: list[dict] = []
+    for i in range(max_check):
+        cap = cv.VideoCapture(i)
+        if cap.isOpened():
+            cameras.append({"index": i, "name": f"Camera {i}"})
+            cap.release()
+    return cameras
 
 
 def distraction_weights() -> dict[DistractionType, float]:
