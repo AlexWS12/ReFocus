@@ -151,6 +151,7 @@ class Camera:
         self._no_face_since: float | None = None  # wall-clock time the face first disappeared in the current absence
 
         self._load_few_shot_bundle()
+        self._apply_settings_overrides()
 
     # ------------------------------------------------------------------
     # Bundle / calibration helpers
@@ -222,6 +223,35 @@ class Camera:
             self.few_shot_signatures = []
             self.detection_params["few_shot_enabled"] = False
             self.calibrated = False
+
+    def _apply_settings_overrides(self):
+        """Apply user-configured detection thresholds from settings.json.
+
+        Runs after _load_few_shot_bundle() so calibration values are loaded
+        first, then overridden by any non-None user settings. Also applies
+        gaze angle thresholds to the eye_tracker instance.
+        """
+        try:
+            from src.core import settings_manager
+            thresholds = settings_manager.detection_thresholds()
+        except ImportError:
+            return
+
+        if thresholds.get("yolo_conf") is not None:
+            self.yolo_conf_threshold = thresholds["yolo_conf"]
+            self.detection_params["conf"] = self.yolo_conf_threshold
+        if thresholds.get("few_shot_similarity") is not None:
+            self.few_shot_similarity_threshold = thresholds["few_shot_similarity"]
+            self.detection_params["few_shot_similarity_threshold"] = self.few_shot_similarity_threshold
+        if thresholds.get("fallback_conf") is not None:
+            self.fallback_conf_threshold = thresholds["fallback_conf"]
+
+        if thresholds.get("yaw_threshold_deg") is not None:
+            self.eye_tracker.yaw_threshold_deg = thresholds["yaw_threshold_deg"]
+        if thresholds.get("pitch_threshold_deg") is not None:
+            self.eye_tracker.pitch_threshold_deg = thresholds["pitch_threshold_deg"]
+        if thresholds.get("roll_threshold_deg") is not None:
+            self.eye_tracker.roll_threshold_deg = thresholds["roll_threshold_deg"]
 
     # ------------------------------------------------------------------
     # Geometry helpers

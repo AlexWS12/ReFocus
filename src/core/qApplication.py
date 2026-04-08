@@ -5,6 +5,7 @@ from src.experience.main_window import MainWindow
 from src.experience.pet_window import petWindow
 from src.core.database_reader import DatabaseReader
 from src.core.vision_manager import VisionManager
+from src.core import settings_manager
 from src.intelligence.session_manager import SessionManager
 
 from pathlib import Path
@@ -12,6 +13,8 @@ from pathlib import Path
 class QApplication(QApplication):
     def __init__(self):
         super().__init__()
+
+        settings_manager.ensure_defaults()
 
         # Load global stylesheet
         self.load_stylesheet("light.qss")

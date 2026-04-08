@@ -82,6 +82,17 @@ QFrame#statCard {
     border-radius: 10px;
 }
 
+QPushButton {
+    background-color: #e8ecf4;
+    border: 1px solid #dde3f0;
+    border-radius: 8px;
+    padding: 8px 14px;
+}
+
+QPushButton:hover {
+    background-color: #dce1ed;
+}
+
 QPushButton#startSessionButton {
     background-color: #3b7deb;
     color: #ffffff;
@@ -104,6 +115,13 @@ QPushButton#stopSessionButton {
 
 QPushButton#stopSessionButton:hover {
     background-color: #c0392b;
+}
+
+QLineEdit {
+    background-color: #ffffff;
+    color: rgb(34, 34, 34);
+    border: 1px solid #dde3f0;
+    border-radius: 6px;
 }
 
 QLabel#xpLabel,

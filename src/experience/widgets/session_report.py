@@ -1,9 +1,32 @@
+from datetime import datetime
+
 from PySide6.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QWidget,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QMargins, QRectF
+from PySide6.QtGui import QColor, QPainter, QPen
+
+from PySide6.QtCharts import (
+    QChart, QChartView, QPieSeries,
+    QHorizontalBarSeries, QBarSet, QBarCategoryAxis, QValueAxis,
+)
 
 from src.experience.widgets.centered_label import CenteredLabel
+
+_FOCUS_COLOR = QColor("#27ae60")
+_DISTRACT_COLOR = QColor("#e74c3c")
+
+_BAR_COLORS = [
+    QColor("#e74c3c"),
+    QColor("#f5a623"),
+    QColor("#3b7deb"),
+    QColor("#9b59b6"),
+    QColor("#8892a4"),
+]
+
+_TIMELINE_FOCUSED = QColor(39, 174, 96, 180)
+_TIMELINE_DISTRACTED = QColor(231, 76, 60, 200)
+_TIMELINE_BG = QColor(200, 200, 200, 60)
 
 
 def _fmt_duration(seconds: int) -> str:
@@ -69,28 +92,177 @@ class _StatCard(QFrame):
         layout.addWidget(CenteredLabel(value, secondary=True))
 
 
-class _DistractionRow(QWidget):
-    """Single row in the distraction breakdown: label · count · time."""
+class _FocusDonut(QFrame):
+    """Donut chart showing focused vs distracted time split."""
 
-    def __init__(self, label: str, count: int, time_s: int, parent=None):
+    def __init__(self, focused: int, distracted: int, parent=None):
         super().__init__(parent)
-        row = QHBoxLayout(self)
-        row.setContentsMargins(8, 2, 8, 2)
+        self.setObjectName("statCard")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setFixedSize(160, 160)
 
-        name = QLabel(label)
-        name.setStyleSheet("font-size: 13px;")
-        row.addWidget(name)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
 
-        row.addStretch()
+        chart = QChart()
+        chart.setBackgroundVisible(False)
+        chart.legend().hide()
+        chart.setMargins(QMargins(0, 0, 0, 0))
 
-        badge = QLabel(f"{count}x")
-        badge.setStyleSheet("font-size: 13px; font-weight: bold;")
-        row.addWidget(badge)
+        series = QPieSeries()
+        series.setHoleSize(0.55)
 
-        dur = QLabel(_fmt_duration(time_s))
-        dur.setObjectName("secondaryLabel")
-        dur.setStyleSheet("font-size: 13px; margin-left: 8px;")
-        row.addWidget(dur)
+        f_slice = series.append("Focused", max(focused, 0))
+        f_slice.setColor(_FOCUS_COLOR)
+        f_slice.setBorderWidth(0)
+
+        d_slice = series.append("Distracted", max(distracted, 0))
+        d_slice.setColor(_DISTRACT_COLOR)
+        d_slice.setBorderWidth(0)
+
+        chart.addSeries(series)
+
+        view = QChartView(chart)
+        view.setRenderHint(QPainter.RenderHint.Antialiasing)
+        view.setStyleSheet("background: transparent; border: none;")
+        layout.addWidget(view)
+
+
+class _SessionTimeline(QFrame):
+    """Horizontal bar showing focused/distracted segments across session duration."""
+
+    def __init__(self, start_time: str, duration: int, events_timeline: list, parent=None):
+        super().__init__(parent)
+        self.setObjectName("statCard")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setFixedHeight(80)
+
+        self._duration = max(duration, 1)
+        self._start_time = start_time
+        self._segments = self._build_segments(events_timeline)
+
+    def _build_segments(self, events_timeline: list) -> list:
+        """Convert event list into (start_frac, end_frac) distraction segments."""
+        if not self._start_time:
+            return []
+
+        try:
+            session_start = datetime.fromisoformat(self._start_time)
+        except (ValueError, TypeError):
+            return []
+
+        segments = []
+        for ev in events_timeline:
+            try:
+                ev_time = datetime.fromisoformat(ev["timestamp"])
+            except (ValueError, TypeError):
+                continue
+            offset = (ev_time - session_start).total_seconds()
+            dur = ev.get("duration", 0) or 0
+            start_frac = max(0, offset / self._duration)
+            end_frac = min(1.0, (offset + dur) / self._duration)
+            if end_frac > start_frac:
+                segments.append((start_frac, end_frac))
+        return segments
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        margin = 12
+        bar_h = 24
+        x = margin
+        y = (self.height() - bar_h) // 2
+        w = self.width() - 2 * margin
+
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(_TIMELINE_FOCUSED)
+        painter.drawRoundedRect(QRectF(x, y, w, bar_h), 6, 6)
+
+        painter.setBrush(_TIMELINE_DISTRACTED)
+        for start_frac, end_frac in self._segments:
+            sx = x + start_frac * w
+            sw = (end_frac - start_frac) * w
+            painter.drawRoundedRect(QRectF(sx, y, sw, bar_h), 4, 4)
+
+        painter.setPen(QPen(QColor("#888"), 1))
+        font = painter.font()
+        font.setPointSize(9)
+        painter.setFont(font)
+        painter.drawText(
+            QRectF(x, y + bar_h + 2, w, 16),
+            Qt.AlignLeft | Qt.AlignTop,
+            "Start",
+        )
+        painter.drawText(
+            QRectF(x, y + bar_h + 2, w, 16),
+            Qt.AlignRight | Qt.AlignTop,
+            _fmt_duration(self._duration),
+        )
+
+        painter.end()
+
+
+def _build_distraction_bars(report: dict) -> QFrame | None:
+    """Horizontal bar chart of per-type distraction counts for a single session."""
+    rows = [
+        ("Phone", report.get("phone_distractions", 0) or 0),
+        ("Looked Away", report.get("look_away_distractions", 0) or 0),
+        ("Left Desk", report.get("left_desk_distractions", 0) or 0),
+        ("App", report.get("app_distractions", 0) or 0),
+        ("Idle", report.get("idle_distractions", 0) or 0),
+    ]
+    rows = [(label, count) for label, count in rows if count > 0]
+    if not rows:
+        return None
+
+    card = QFrame()
+    card.setObjectName("statCard")
+    card.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+    layout = QVBoxLayout(card)
+
+    header = CenteredLabel("Distraction Breakdown")
+    header.setStyleSheet("font-weight: bold; font-size: 14px;")
+    layout.addWidget(header)
+
+    chart = QChart()
+    chart.setBackgroundVisible(False)
+    chart.legend().hide()
+    chart.setMargins(QMargins(4, 4, 4, 4))
+
+    categories = []
+    series = QHorizontalBarSeries()
+    for i, (label, count) in enumerate(rows):
+        bar_set = QBarSet(label)
+        bar_set.append(count)
+        bar_set.setColor(_BAR_COLORS[i % len(_BAR_COLORS)])
+        series.append(bar_set)
+        categories.append(label)
+
+    chart.addSeries(series)
+
+    axis_y = QBarCategoryAxis()
+    axis_y.append(categories)
+    chart.addAxis(axis_y, Qt.AlignLeft)
+    series.attachAxis(axis_y)
+
+    max_val = max(c for _, c in rows)
+    axis_x = QValueAxis()
+    axis_x.setRange(0, max_val * 1.15)
+    axis_x.setLabelFormat("%d")
+    axis_x.setGridLineColor(QColor(200, 200, 200, 60))
+    chart.addAxis(axis_x, Qt.AlignBottom)
+    series.attachAxis(axis_x)
+
+    view = QChartView(chart)
+    view.setRenderHint(QPainter.RenderHint.Antialiasing)
+    view.setStyleSheet("background: transparent; border: none;")
+    view.setMinimumHeight(max(100, len(rows) * 36))
+    layout.addWidget(view)
+
+    return card
 
 
 class SessionReport(QWidget):
@@ -119,14 +291,14 @@ class SessionReport(QWidget):
         self._root.addWidget(title)
         self._root.addSpacing(8)
 
-        # --- Score ring centred ---
-        score_row = QHBoxLayout()
-        score_row.setAlignment(Qt.AlignCenter)
-        score_row.addWidget(_ScoreRing(score))
-        self._root.addLayout(score_row)
-        self._root.addSpacing(12)
+        hero_row = QHBoxLayout()
+        hero_row.setAlignment(Qt.AlignCenter)
+        hero_row.addWidget(_ScoreRing(score))
+        hero_row.addSpacing(24)
+        hero_row.addWidget(_FocusDonut(focused, distracted))
+        self._root.addLayout(hero_row)
+        self._root.addSpacing(16)
 
-        # --- Key stats grid ---
         grid = QGridLayout()
         grid.setSpacing(10)
         grid.addWidget(_StatCard("Duration", _fmt_duration(duration)), 0, 0)
@@ -138,40 +310,18 @@ class SessionReport(QWidget):
         self._root.addLayout(grid)
         self._root.addSpacing(12)
 
-        # --- Distraction breakdown ---
-        breakdown = self._build_breakdown(report, distracted)
-        if breakdown is not None:
-            self._root.addWidget(breakdown)
+        bar_chart = _build_distraction_bars(report)
+        if bar_chart is not None:
+            self._root.addWidget(bar_chart)
+            self._root.addSpacing(8)
 
-    def _build_breakdown(self, report: dict, total_distracted: int) -> QFrame | None:
-        rows = [
-            ("Phone", report.get("phone_distractions", 0), report.get("phone_time", 0)),
-            ("Looked Away", report.get("look_away_distractions", 0), report.get("look_away_time", 0)),
-            ("Left Desk", report.get("left_desk_distractions", 0), report.get("time_away", 0)),
-            ("App", report.get("app_distractions", 0), None),
-            ("Idle", report.get("idle_distractions", 0), None),
-        ]
-        rows = [(l, c or 0, t or 0) for l, c, t in rows if (c or 0) > 0]
-        if not rows:
-            return None
-
-        card = QFrame()
-        card.setObjectName("statCard")
-        card.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        layout = QVBoxLayout(card)
-
-        header = CenteredLabel("Distraction Breakdown")
-        header.setStyleSheet("font-weight: bold; font-size: 14px;")
-        layout.addWidget(header)
-
-        for label, count, time_s in rows:
-            layout.addWidget(_DistractionRow(label, count, time_s))
-
-        if total_distracted:
-            total = CenteredLabel(f"Total distracted: {_fmt_duration(total_distracted)}", secondary=True)
-            layout.addWidget(total)
-
-        return card
+        timeline_events = report.get("events_timeline", [])
+        start_time = report.get("start_time", "")
+        if duration > 0:
+            timeline_label = CenteredLabel("Session Timeline")
+            timeline_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+            self._root.addWidget(timeline_label)
+            self._root.addWidget(_SessionTimeline(start_time, duration, timeline_events))
 
     def _clear(self):
         while self._root.count():
