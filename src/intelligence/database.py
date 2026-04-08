@@ -24,7 +24,9 @@ class Database:
         self._create_events_table()
         self._create_achievements_table()
         self._create_user_settings_table() # New table for user settings to control distraction type toggles
+        self._create_inventory_table()
         self._migrate_sessions_table()
+        self._migrate_current_pet_default()
         self.conn.commit()
 
 
@@ -202,6 +204,32 @@ class Database:
         ''')
         # Seed the singleton row so reads always find a record (same as user_stats)
         cursor.execute("INSERT OR IGNORE INTO user_settings (id) VALUES (1)")
+
+    def _create_inventory_table(self):
+        cursor = self._get_connection().cursor()
+
+        # Tracks which pets (and later accessories) the user owns.
+        # item_type  - 'pet' or 'accessory'
+        # item_id    - key from PET_CATALOG / ACCESSORY_CATALOG
+        # acquired_at - ISO 8601 timestamp of purchase
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS inventory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_type TEXT NOT NULL,
+                item_id TEXT NOT NULL,
+                acquired_at TEXT,
+                UNIQUE(item_type, item_id)
+            )
+        ''')
+        cursor.execute(
+            "INSERT OR IGNORE INTO inventory (item_type, item_id) VALUES ('pet', 'panther')"
+        )
+
+    def _migrate_current_pet_default(self):
+        cursor = self._get_connection().cursor()
+        cursor.execute(
+            "UPDATE user_stats SET current_pet = 'panther' WHERE id = 1 AND current_pet = 'default'"
+        )
 
     def _migrate_sessions_table(self):
         # Schema migration: add the enabled_distractions column to the existing
