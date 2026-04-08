@@ -222,13 +222,13 @@ class Database:
             )
         ''')
         cursor.execute(
-            "INSERT OR IGNORE INTO inventory (item_type, item_id) VALUES ('pet', 'panther')"
+            "INSERT OR IGNORE INTO inventory (item_type, item_id) VALUES ('pet', 'cat')"
         )
 
     def _migrate_current_pet_default(self):
         cursor = self._get_connection().cursor()
         cursor.execute(
-            "UPDATE user_stats SET current_pet = 'panther' WHERE id = 1 AND current_pet = 'default'"
+            "UPDATE user_stats SET current_pet = 'cat' WHERE id = 1 AND current_pet IN ('default', 'panther')"
         )
 
     def _migrate_sessions_table(self):

@@ -3,26 +3,21 @@ from pathlib import Path
 _STATIC = Path(__file__).resolve().parent / "static"
 
 PET_CATALOG: dict[str, dict] = {
-    "panther": {
-        "name": "Panther",
-        "sprite": str(_STATIC / "pets" / "panther" / "Panther.png"),
-        "cost": 0,
-    },
     "cat": {
         "name": "Calico Cat",
         "sprite": str(_STATIC / "pets" / "cat" / "Cat.png"),
-        "cost": 50,
+        "cost": 0,
     },
     "dog": {
         "name": "Pup",
         "sprite": str(_STATIC / "pets" / "dog" / "Dog.png"),
-        "cost": 50,
+        "cost": 0,
     },
     "frog": {
         "name": "Frog",
         "sprite": str(_STATIC / "pets" / "frog" / "Frog.png"),
-        "cost": 75,
+        "cost": 0,
     },
 }
 
-DEFAULT_PET = "panther"
+DEFAULT_PET = "cat"
