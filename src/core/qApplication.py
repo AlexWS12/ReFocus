@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, Signal, QObject
 
 from src.experience.main_window import MainWindow
 from src.experience.pet_window import petWindow
@@ -10,9 +10,15 @@ from src.intelligence.session_manager import SessionManager
 
 from pathlib import Path
 
+
+class AppSignals(QObject):
+    pet_appearance_changed = Signal()
+
+
 class QApplication(QApplication):
     def __init__(self):
         super().__init__()
+        self.signals = AppSignals()
 
         settings_manager.ensure_defaults()
 

@@ -45,6 +45,7 @@ class Dashboard(QWidget):
         self.score_trend.refresh(self.data)
         self.PreviousSession.refresh(self.data)
         self.Calendar.set_scores(self.data.get("scores_by_date", {}))
+        self.PetView.refresh()
 
     def start_setup(self):
         self.app.main_window.pages_stack.setCurrentIndex(6)

@@ -152,3 +152,18 @@ QLabel#xpLabel,
 QLabel#coinLabel {
     color: #f5a623;
 }
+
+QFrame#petCard {
+    background-color: #1a2744;
+    border: 2px solid #1e3a5f;
+    border-radius: 12px;
+}
+
+QFrame#petCard:hover {
+    border-color: #2e5a8f;
+}
+
+QFrame#petCard[cardState="equipped"] {
+    border-color: #4f8ef7;
+    background-color: #1c3360;
+}

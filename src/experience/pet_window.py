@@ -3,6 +3,7 @@ from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QColor
 from PySide6.QtCore import Qt, QEvent, QTimer
 
 from src.experience.widgets.centered_label import CenteredLabel
+from src.experience.pet_catalog import PET_CATALOG, DEFAULT_PET
 
 _BUBBLE_MESSAGES = {
     "PHONE_DISTRACTION": "Put your phone away!",
@@ -72,11 +73,8 @@ class petWindow(QMainWindow):
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet("background: transparent;")
 
-        self.image = QPixmap("src/experience/static/Panther.png")
-
         self.label = CenteredLabel("")
-        scaled = self.image.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-        self.label.setPixmap(scaled)
+        self._refresh_sprite()
 
         self.session_btn = QPushButton("Session")
         self.session_btn.setFixedHeight(24)
@@ -107,6 +105,21 @@ class petWindow(QMainWindow):
         self._bubble_timer.setSingleShot(True)
         self._bubble_timer.timeout.connect(self._bubble.hide)
         self._last_bubble_time = 0.0
+
+        app = QApplication.instance()
+        if hasattr(app, "signals"):
+            app.signals.pet_appearance_changed.connect(self._refresh_sprite)
+
+    def _refresh_sprite(self):
+        from src.intelligence.pet_manager import PetManager
+
+        mgr = PetManager()
+        pet_id = mgr.get_active_pet()
+        pet_info = PET_CATALOG.get(pet_id, PET_CATALOG[DEFAULT_PET])
+
+        pixmap = QPixmap(pet_info["sprite"])
+        scaled = pixmap.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.label.setPixmap(scaled)
 
     def eventFilter(self, obj, event):
         if obj == self.label:
