@@ -13,7 +13,7 @@ class Achievement_Manager():
         return {
             "First Step": self.analytics["total_sessions"],
             "On A Roll": 0,
-            "Grind Mode": self.analytics["lifetime_focus_seconds"],
+            "Grind Mode": self.analytics["lifetime_focus_seconds"] // 3600,
             "Marathon": self.analytics["longest_focus_seconds"],
             "Consistent": 0,
             "Dedicated": 0,

@@ -37,10 +37,11 @@ class Achievements(QWidget):
         for achievement, info in ACHIEVMENT_CATALOG.items():
             description = info["description"]
             goal = info["goal"]
+            icon = info["icon"]
 
             if self.progress[achievement] >= goal:
                 completed = True
             else:
                 completed = False
 
-            container_layout.addWidget(Achievement_Card(achievement, description, self.progress[achievement], goal, completed))
+            container_layout.addWidget(Achievement_Card(achievement, description, self.progress[achievement], goal, completed, icon))

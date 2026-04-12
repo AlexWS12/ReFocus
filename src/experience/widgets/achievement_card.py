@@ -1,7 +1,9 @@
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel, QHBoxLayout
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
 
 class Achievement_Card(QFrame):
-    def __init__(self, name: str, description: str, progress: int, goal: int, unlocked: bool):
+    def __init__(self, name: str, description: str, progress: int, goal: int, unlocked: bool, icon_path: str):
         super().__init__()
         self.setObjectName("achievementCard")
 
@@ -16,7 +18,15 @@ class Achievement_Card(QFrame):
         left.addWidget(QLabel(name))
         left.addWidget(QLabel(description))
 
+        self.icon = QLabel()
+        pixmap = QPixmap(icon_path)
+        pixmap = QPixmap(icon_path).scaled(100, 100, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.icon.setPixmap(pixmap)
+
+        card_layout.addWidget(self.icon)
         card_layout.addLayout(left)
+        card_layout.addStretch()
+        progress = min(progress, goal)
         card_layout.addWidget(QLabel(f"{progress} / {goal}"))
 
         # Turns background green if goal is meet
