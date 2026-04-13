@@ -22,10 +22,10 @@ class Achievements(QWidget):
 
         container = QWidget()
         container.setStyleSheet("background-color: #f4f6fb;")
-        container_layout = QVBoxLayout()
-        container_layout.setSpacing(12)
-        container_layout.setContentsMargins(24, 16, 24, 16)
-        container.setLayout(container_layout)
+        self.container_layout = QVBoxLayout()
+        self.container_layout.setSpacing(12)
+        self.container_layout.setContentsMargins(24, 16, 24, 16)
+        container.setLayout(self.container_layout)
         scroll.setWidget(container)
 
         self.page_layout.addWidget(scroll)
@@ -34,6 +34,9 @@ class Achievements(QWidget):
         self.achievement_manager = Achievement_Manager()
         self.progress = self.achievement_manager.get_progress()
 
+        self._refresh_state()
+
+    def create_card(self):
         for achievement, info in ACHIEVMENT_CATALOG.items():
             description = info["description"]
             goal = info["goal"]
@@ -44,4 +47,22 @@ class Achievements(QWidget):
             else:
                 completed = False
 
-            container_layout.addWidget(Achievement_Card(achievement, description, self.progress[achievement], goal, completed, icon))
+            self.container_layout.addWidget(Achievement_Card(achievement, description, self.progress[achievement], goal, completed, icon))
+
+    def _clear_layout(self, layout):
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+    def _refresh_state(self):
+        self.progress = self.achievement_manager.get_progress()
+        self._clear_layout(self.container_layout)
+        self.create_card()
+
+        
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._refresh_state()
+    

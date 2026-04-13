@@ -32,6 +32,7 @@ _DEFAULTS = {
     "enabled_distractions": [dt.value for dt in DistractionType],
     "distraction_weights": dict(_DEFAULT_WEIGHTS),
     "detection_thresholds": dict(_DEFAULT_DETECTION_THRESHOLDS),
+    "used_dark_mode": False,
 }
 
 

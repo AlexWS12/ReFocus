@@ -54,7 +54,7 @@ ACHIEVMENT_CATALOG: dict[str,dict] = {
         "icon": str(_STATIC / "XP_Collector.png")
     },
     "Pet Lover": {
-        "description": "Complete a study session with each pet",
+        "description": "Own 3 pets",
         "goal": 3,
         "icon": str(_STATIC / "Pet_Lover.png")
     },
