@@ -137,6 +137,7 @@ class Camera:
         # keeps the event open so brief flickers don't split one distraction
         # into many.  Duration is measured start → last_seen (not start → now).
         self._session_manager = session_manager
+        self._on_distraction_started = None  # callback(distraction_type_str) set by VisionManager
         self._DISTRACTION_COOLDOWN = 5.0  # seconds of absence before an event is finalized and logged
         self._LEFT_DESK_TRANSITION_SECONDS = 10.0  # promote no-face look-away to left-desk after continuous absence
         self._phone_distraction_start: float | None = None  # wall-clock time the current phone event opened
@@ -151,6 +152,7 @@ class Camera:
         self._no_face_since: float | None = None  # wall-clock time the face first disappeared in the current absence
 
         self._load_few_shot_bundle()
+        self._apply_settings_overrides()
 
     # ------------------------------------------------------------------
     # Bundle / calibration helpers
@@ -222,6 +224,35 @@ class Camera:
             self.few_shot_signatures = []
             self.detection_params["few_shot_enabled"] = False
             self.calibrated = False
+
+    def _apply_settings_overrides(self):
+        """Apply user-configured detection thresholds from settings.json.
+
+        Runs after _load_few_shot_bundle() so calibration values are loaded
+        first, then overridden by any non-None user settings. Also applies
+        gaze angle thresholds to the eye_tracker instance.
+        """
+        try:
+            from src.core import settings_manager
+            thresholds = settings_manager.detection_thresholds()
+        except ImportError:
+            return
+
+        if thresholds.get("yolo_conf") is not None:
+            self.yolo_conf_threshold = thresholds["yolo_conf"]
+            self.detection_params["conf"] = self.yolo_conf_threshold
+        if thresholds.get("few_shot_similarity") is not None:
+            self.few_shot_similarity_threshold = thresholds["few_shot_similarity"]
+            self.detection_params["few_shot_similarity_threshold"] = self.few_shot_similarity_threshold
+        if thresholds.get("fallback_conf") is not None:
+            self.fallback_conf_threshold = thresholds["fallback_conf"]
+
+        if thresholds.get("yaw_threshold_deg") is not None:
+            self.eye_tracker.yaw_threshold_deg = thresholds["yaw_threshold_deg"]
+        if thresholds.get("pitch_threshold_deg") is not None:
+            self.eye_tracker.pitch_threshold_deg = thresholds["pitch_threshold_deg"]
+        if thresholds.get("roll_threshold_deg") is not None:
+            self.eye_tracker.roll_threshold_deg = thresholds["roll_threshold_deg"]
 
     # ------------------------------------------------------------------
     # Geometry helpers
@@ -547,6 +578,8 @@ class Camera:
         if phone_detected:
             if self._phone_distraction_start is None:
                 self._phone_distraction_start = now  # open a new event on first detection
+                if self._on_distraction_started:
+                    self._on_distraction_started("PHONE_DISTRACTION")
             self._phone_last_seen = now  # keep refreshing so the cooldown resets each frame
         elif self._phone_distraction_start is not None:
             # Phone is gone but the event is still open — wait out the cooldown before logging.
@@ -602,6 +635,8 @@ class Camera:
                 # Keep the look-away event open while we wait for the promotion threshold.
                 if self._look_away_distraction_start is None:
                     self._look_away_distraction_start = now
+                    if self._on_distraction_started:
+                        self._on_distraction_started("LOOK_AWAY_DISTRACTION")
                 self._look_away_last_seen = now
 
                 # Promote only once the face has been continuously absent for the full threshold.
@@ -610,6 +645,8 @@ class Camera:
                     self._left_desk_last_seen = now
                     self._look_away_distraction_start = None
                     self._look_away_last_seen = None
+                    if self._on_distraction_started:
+                        self._on_distraction_started("LEFT_DESK_DISTRACTION")
             else:
                 # Already transitioned; keep extending the left-desk event.
                 self._left_desk_last_seen = now
@@ -632,6 +669,8 @@ class Camera:
             if looking_away:
                 if self._look_away_distraction_start is None:
                     self._look_away_distraction_start = now
+                    if self._on_distraction_started:
+                        self._on_distraction_started("LOOK_AWAY_DISTRACTION")
                 self._look_away_last_seen = now
             elif self._look_away_distraction_start is not None:
                 if now - self._look_away_last_seen >= self._DISTRACTION_COOLDOWN:

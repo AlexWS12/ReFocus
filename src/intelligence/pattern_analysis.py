@@ -218,6 +218,7 @@ class PatternAnalyzer:
     def focus_trend(self, sessions: list, window: int = 5) -> dict:
         if not sessions:
             return {
+                "scores":      [],
                 "rolling_avg": [],
                 "recent_avg":  None,
                 "overall_avg": None,
@@ -246,6 +247,7 @@ class PatternAnalyzer:
             trend = "stable"
 
         return {
+            "scores":      scores,
             "rolling_avg": rolling,
             "recent_avg":  recent_avg,
             "overall_avg": overall_avg,

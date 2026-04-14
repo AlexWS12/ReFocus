@@ -44,6 +44,7 @@ class MainWindow(QMainWindow):
 
         # add sidebar and top bar pages container to main layout
         self.sidebar = Sidebar(self)
+        self.sidebar.setFixedWidth(140)
         self.layout.addWidget(self.sidebar)
         self.layout.addWidget(self.topbar_pages_container)
 
@@ -53,6 +54,8 @@ class MainWindow(QMainWindow):
         # intialize stacked pages
         self.pages_stack = QStackedWidget()
         self.pages_stack.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.pages_stack.setMaximumWidth(800)
+        self.pages_stack.setMaximumHeight(600)
 
         # add pages to stack
         self.pages_stack.addWidget(Dashboard(self))
@@ -63,8 +66,20 @@ class MainWindow(QMainWindow):
         self.pages_stack.addWidget(Settings(self))
         self.pages_stack.addWidget(Setup(self))
         self.pages_stack.setCurrentIndex(0)
-        
-        self.topbar_pages_layout.addWidget(self.pages_stack)
+
+        # center pages both horizontally and vertically
+        pages_row = QHBoxLayout()
+        pages_row.setContentsMargins(0, 0, 0, 0)
+        pages_row.addStretch(1)
+        pages_row.addWidget(self.pages_stack)
+        pages_row.addStretch(1)
+
+        pages_wrapper = QVBoxLayout()
+        pages_wrapper.setContentsMargins(0, 0, 0, 0)
+        pages_wrapper.addStretch(1)
+        pages_wrapper.addLayout(pages_row)
+        pages_wrapper.addStretch(1)
+        self.topbar_pages_layout.addLayout(pages_wrapper)
 
         self.show()
 

@@ -327,6 +327,32 @@ class PhoneCalibration:
         )
         return True
 
+    def _sync_thresholds_to_settings(self):
+        """Write calibration-derived phone thresholds to settings.json.
+
+        Called after a successful calibration so the Settings UI reflects the
+        newly computed values without requiring a manual entry.
+        """
+        try:
+            from src.core import settings_manager
+        except ImportError:
+            return
+
+        conf = self.calibration_data.get("optimal_conf_threshold")
+        similarity = self.calibration_data.get("few_shot_similarity_threshold")
+        fallback = min(1.0, conf + 0.15) if conf is not None else None
+
+        settings = settings_manager.load()
+        thresholds = settings.get("detection_thresholds", {})
+        if conf is not None:
+            thresholds["yolo_conf"] = round(conf, 3)
+        if similarity is not None:
+            thresholds["few_shot_similarity"] = round(similarity, 3)
+        if fallback is not None:
+            thresholds["fallback_conf"] = round(fallback, 3)
+        settings["detection_thresholds"] = thresholds
+        settings_manager.save(settings)
+
     def _rotation_valid(self, metrics, baseline, direction, phase_start_x):
         """Heuristic check for side rotation. This is a proxy, not a perfect 3D angle measurement."""
         # Right/left rotation makes the visible phone face appear narrower and smaller.
@@ -904,6 +930,8 @@ class PhoneCalibration:
                 few_shot_thresholds,
             )
             result["few_shot_bundle_path"] = self.few_shot_bundle_path
+
+            self._sync_thresholds_to_settings()
         
         cap.release()
         cv2.destroyAllWindows()

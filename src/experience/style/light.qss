@@ -82,6 +82,17 @@ QFrame#statCard {
     border-radius: 10px;
 }
 
+QPushButton {
+    background-color: #e8ecf4;
+    border: 1px solid #dde3f0;
+    border-radius: 8px;
+    padding: 8px 14px;
+}
+
+QPushButton:hover {
+    background-color: #dce1ed;
+}
+
 QPushButton#startSessionButton {
     background-color: #3b7deb;
     color: #ffffff;
@@ -106,7 +117,29 @@ QPushButton#stopSessionButton:hover {
     background-color: #c0392b;
 }
 
+QLineEdit {
+    background-color: #ffffff;
+    color: rgb(34, 34, 34);
+    border: 1px solid #dde3f0;
+    border-radius: 6px;
+}
+
 QLabel#xpLabel,
 QLabel#coinLabel {
     color: #f5a623;
+}
+
+QFrame#petCard {
+    background-color: #f4f6fb;
+    border: 2px solid #dde3f0;
+    border-radius: 12px;
+}
+
+QFrame#petCard:hover {
+    border-color: #b0bdd4;
+}
+
+QFrame#petCard[cardState="equipped"] {
+    border-color: #3b7deb;
+    background-color: #eaf1fd;
 }
