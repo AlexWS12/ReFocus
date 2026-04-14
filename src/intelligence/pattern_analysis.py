@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 import os
 
 import numpy as np
@@ -534,194 +535,176 @@ class PatternAnalyzer:
     # Markdown report generation
     # ------------------------------------------------------------------
 
-    def generate_markdown_report(self, output_path: str = None) -> str | None:
+    def _fetch_session_events(self, session_id: int) -> list:
+        cursor = self.db.cursor()
+        cursor.execute('''
+            SELECT event_type, timestamp, duration
+            FROM events
+            WHERE session_id = ?
+            ORDER BY timestamp ASC
+        ''', (session_id,))
+        return cursor.fetchall()
+
+    def generate_session_report(self, session_id: int, output_path: str = None) -> str | None:
+        """Generate a per-session distraction summary as a JSON file."""
+        cursor = self.db.cursor()
+        cursor.execute('''
+            SELECT id, start_time, end_time, duration, focused_time,
+                   phone_distractions, look_away_distractions,
+                   left_desk_distractions, app_distractions, idle_distractions,
+                   distraction_time
+            FROM sessions
+            WHERE id = ? AND end_time IS NOT NULL
+        ''', (session_id,))
+        session = cursor.fetchone()
+        if session is None:
+            return None
+
+        events = self._fetch_session_events(session_id)
+
+        # Count and accumulate per-event-type durations from the events table
+        event_counts: dict[str, int] = {}
+        event_durations: dict[str, list[int]] = {}
+        for ev in events:
+            etype = ev["event_type"]
+            dur   = ev["duration"] or 0
+            event_counts[etype]    = event_counts.get(etype, 0) + 1
+            event_durations.setdefault(etype, []).append(dur)
+
+        duration         = session["duration"] or 0
+        distraction_time = session["distraction_time"] or 0
+        focused_time     = max(0, duration - distraction_time)
+
+        distraction_keys = [
+            "phone_distraction",
+            "look_away_distraction",
+            "left_desk_distraction",
+            "app_distraction",
+            "idle_distraction",
+        ]
+        # Fallback: build counts from session columns when events table has nothing
+        if not event_counts:
+            col_to_dist_col = {
+                "phone_distraction":     "phone_distractions",
+                "look_away_distraction": "look_away_distractions",
+                "left_desk_distraction": "left_desk_distractions",
+                "app_distraction":       "app_distractions",
+                "idle_distraction":      "idle_distractions",
+            }
+            for key, db_col in col_to_dist_col.items():
+                cnt = session[db_col] or 0
+                if cnt > 0:
+                    event_counts[key] = cnt
+
+        if output_path is None:
+            output_path = f"session_{session_id}_report.json"
+
+        report = {
+            "generated_at": datetime.now().isoformat(),
+            "session_id": session_id,
+            "overview": {
+                "start_time":           session["start_time"],
+                "end_time":             session["end_time"],
+                "duration_seconds":     duration,
+                "duration_minutes":     round(duration / 60, 1),
+                "focused_time_seconds": focused_time,
+                "focused_time_minutes": round(focused_time / 60, 1),
+                "distraction_time_seconds": distraction_time,
+                "distraction_time_minutes": round(distraction_time / 60, 1),
+            },
+            "distractions": {
+                key: {
+                    "count":              event_counts.get(key, 0),
+                    "event_durations_seconds": event_durations.get(key, []),
+                }
+                for key in distraction_keys
+            },
+        }
+
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(report, f, indent=2)
+
+        return os.path.abspath(output_path)
+
+    def generate_insights_report(self, output_path: str = None,
+                                  last_analyzed_count: int = 0) -> str | None:
+        """Generate the rolling insights report as a JSON file."""
+        if not self.should_update(last_analyzed_count):
+            return None
         analysis = self.analyze()
         if analysis is None:
             return None
 
         if output_path is None:
-            output_path = "study_insights_report.md"
+            output_path = "study_insights_report.json"
 
         sessions = self._fetch_sessions()
-        first_date = sessions[0]["start_time"][:10] if sessions else "N/A"
-        last_date  = sessions[-1]["start_time"][:10] if sessions else "N/A"
-
-        lines: list[str] = []
-        _a = lines.append
-
-        _a("# Study Session Pattern Analysis Report\n")
-        _a(f"> Generated on {datetime.now().strftime('%B %d, %Y')} "
-           f"| {analysis['session_count']} sessions analyzed\n")
-        _a("---\n")
+        first_date = sessions[0]["start_time"][:10] if sessions else None
+        last_date  = sessions[-1]["start_time"][:10] if sessions else None
 
         trend_data = analysis.get("trend", {})
         forecast   = analysis.get("ml_forecast", {})
-        _a("## Summary\n")
-        _a("| Metric | Value |")
-        _a("|--------|-------|")
-        _a(f"| Sessions Analyzed | {analysis['session_count']} |")
-        _a(f"| Date Range | {first_date} to {last_date} |")
-        overall_avg = trend_data.get("overall_avg", "N/A")
-        _a(f"| Overall Avg Score | {overall_avg} |")
-        if forecast.get("direction"):
-            slope = forecast.get("slope", 0)
-            sign = "+" if slope >= 0 else ""
-            _a(f"| Score Trajectory | {forecast['direction'].title()} "
-               f"({sign}{slope} pts/session) |")
-        _a("")
+        fi         = analysis.get("ml_feature_importance", {})
+        cl         = analysis.get("ml_clusters", {})
+        tod        = analysis.get("time_of_day", {})
+        sl         = analysis.get("session_length", {})
+        dist       = analysis.get("distractions", {})
 
-        insights = analysis.get("insights", [])
-        if insights:
-            _a("## Key Insights\n")
-            for ins in insights:
-                _a(f"- {ins}")
-            _a("")
+        report = {
+            "generated_at":    datetime.now().isoformat(),
+            "session_count":   analysis["session_count"],
+            "date_range": {
+                "first": first_date,
+                "last":  last_date,
+            },
+            "summary": {
+                "overall_avg_score": trend_data.get("overall_avg"),
+                "score_trajectory": {
+                    "direction":       forecast.get("direction"),
+                    "slope_per_session": forecast.get("slope"),
+                },
+            },
+            "insights": analysis.get("insights", []),
+            "time_of_day": {
+                "best_period": tod.get("best_period"),
+                "buckets": tod.get("buckets", {}),
+            },
+            "session_length": {
+                "best_length": sl.get("best_length"),
+                "buckets": sl.get("buckets", {}),
+            },
+            "distractions": {
+                "most_frequent":  dist.get("most_frequent"),
+                "most_impactful": dist.get("most_impactful"),
+                "total_events":   dist.get("total_events"),
+                "ranked_by_count": dist.get("ranked_by_count", []),
+            },
+            "trend": {
+                "trend":       trend_data.get("trend"),
+                "delta":       trend_data.get("delta"),
+                "recent_avg":  trend_data.get("recent_avg"),
+                "overall_avg": trend_data.get("overall_avg"),
+                "rolling_avg": trend_data.get("rolling_avg", []),
+            },
+            "peak_focus": analysis.get("peak_focus", {}),
+            "ml_feature_importance": {
+                "r2_score":   fi.get("r2_score"),
+                "top_factor": fi.get("top_factor"),
+                "features":   fi.get("features", []),
+            },
+            "ml_clusters": {
+                "n_clusters": cl.get("n_clusters"),
+                "clusters":   cl.get("clusters", []),
+            },
+            "ml_forecast": {
+                "direction":         forecast.get("direction"),
+                "slope":             forecast.get("slope"),
+                "r2_score":          forecast.get("r2_score"),
+                "predicted_next_5":  forecast.get("predicted_next_5", []),
+            },
+        }
 
-        _a("---\n")
-
-        fi = analysis.get("ml_feature_importance", {})
-        if fi.get("features"):
-            _a("## Machine Learning Analysis\n")
-            _a("### What Affects Your Focus Most\n")
-            _a("A **Random Forest** model was trained on your session data to "
-               "determine which factors have the greatest impact on your "
-               "focus score.\n")
-            r2 = fi.get("r2_score")
-            if r2 is not None:
-                _a(f"*Model fit: R\u00b2 = {r2}*\n")
-            _a("| Rank | Factor | Importance |")
-            _a("|------|--------|-----------|")
-            for rank, feat in enumerate(fi["features"], 1):
-                _a(f"| {rank} | {feat['label']} | {feat['importance_pct']}% |")
-            _a("")
-            top = fi.get("top_factor")
-            if top:
-                _a(f"**Takeaway:** *{top}* has the strongest influence "
-                   "on your focus score.\n")
-
-        cl = analysis.get("ml_clusters", {})
-        clusters = cl.get("clusters", [])
-        if clusters:
-            _a("### Your Session Profiles\n")
-            _a(f"K-Means clustering identified **{len(clusters)} distinct "
-               "session patterns**:\n")
-            icons = {
-                "High Focus":        "\U0001f7e2",
-                "Moderate Focus":    "\U0001f7e1",
-                "Needs Improvement": "\U0001f534",
-            }
-            for c in clusters:
-                icon = icons.get(c["label"], "\u26aa")
-                _a(f"#### {icon} {c['label']} "
-                   f"({c['session_count']} sessions)\n")
-                _a(f"- **Avg Score:** {c['avg_score']}")
-                _a(f"- **Avg Duration:** {c['avg_duration_min']} min")
-                _a(f"- **Avg Distractions:** {c['avg_distractions']}")
-                _a(f"- **Typical Hour:** {_format_hour(c['avg_hour'])}")
-                ids_str = ", ".join(f"#{sid}" for sid in c["session_ids"])
-                _a(f"- **Sessions:** {ids_str}")
-                _a("")
-
-        if forecast.get("direction"):
-            _a("### Score Forecast\n")
-            _a("Linear regression on your score history:\n")
-            slope = forecast.get("slope", 0)
-            sign = "+" if slope >= 0 else ""
-            _a(f"- **Trajectory:** {forecast['direction'].title()} "
-               f"({sign}{slope} pts/session)")
-            _a(f"- **Model Confidence:** R\u00b2 = "
-               f"{forecast.get('r2_score', 'N/A')}")
-            preds = forecast.get("predicted_next_5", [])
-            if preds:
-                preds_str = ", ".join(str(p) for p in preds)
-                _a(f"- **Projected Scores (next 5 sessions):** {preds_str}")
-            _a("")
-
-        _a("---\n")
-
-        _a("## Detailed Breakdowns\n")
-        tod = analysis.get("time_of_day", {})
-        buckets = tod.get("buckets", {})
-        if buckets:
-            _a("### Performance by Time of Day\n")
-            period_labels = {
-                "morning":   "Morning (6 AM \u2013 12 PM)",
-                "afternoon": "Afternoon (12 PM \u2013 5 PM)",
-                "evening":   "Evening (5 PM \u2013 9 PM)",
-                "night":     "Night (9 PM \u2013 6 AM)",
-            }
-            _a("| Period | Sessions | Avg Score | Avg Focus % |")
-            _a("|--------|----------|-----------|-------------|")
-            best = tod.get("best_period")
-            for period in _TIME_BUCKETS:
-                b = buckets.get(period, {})
-                count = b.get("count", 0)
-                avg_s = b.get("avg_score")
-                avg_f = b.get("avg_focus_pct")
-                label = period_labels.get(period, period)
-                marker = " \u2b50" if period == best else ""
-                score_str = f"{avg_s}" if avg_s is not None else "\u2014"
-                focus_str = f"{avg_f}%" if avg_f is not None else "\u2014"
-                _a(f"| {label}{marker} | {count} | {score_str} | {focus_str} |")
-            _a("")
-
-        sl = analysis.get("session_length", {})
-        sl_buckets = sl.get("buckets", {})
-        if sl_buckets:
-            _a("### Performance by Session Length\n")
-            dur_labels = {
-                "short":    "Short (< 30 min)",
-                "medium":   "Medium (30 \u2013 60 min)",
-                "long":     "Long (60 \u2013 90 min)",
-                "marathon": "Marathon (90+ min)",
-            }
-            _a("| Duration | Sessions | Avg Score | Avg Focus % |")
-            _a("|----------|----------|-----------|-------------|")
-            best_len = sl.get("best_length")
-            for bracket in _DURATION_BUCKETS:
-                b = sl_buckets.get(bracket, {})
-                count = b.get("count", 0)
-                avg_s = b.get("avg_score")
-                avg_f = b.get("avg_focus_pct")
-                label = dur_labels.get(bracket, bracket)
-                marker = " \u2b50" if bracket == best_len else ""
-                score_str = f"{avg_s}" if avg_s is not None else "\u2014"
-                focus_str = f"{avg_f}%" if avg_f is not None else "\u2014"
-                _a(f"| {label}{marker} | {count} | {score_str} | "
-                   f"{focus_str} |")
-            _a("")
-
-        dist = analysis.get("distractions", {})
-        ranked = dist.get("ranked_by_count", [])
-        if ranked:
-            _a("### Distraction Breakdown\n")
-            _a("| Type | Events | % of Total |")
-            _a("|------|--------|-----------|")
-            for r in ranked:
-                _a(f"| {r['type']} | {r['total_events']} "
-                   f"| {r['pct_of_all_events']}% |")
-            _a("")
-            if dist.get("most_impactful"):
-                _a(f"**Most time lost to:** {dist['most_impactful']}\n")
-
-        if (trend_data.get("trend")
-                and trend_data["trend"] != "insufficient_data"):
-            _a("### Focus Trend\n")
-            _a(f"- **Recent Average (last 5):** "
-               f"{trend_data.get('recent_avg', 'N/A')}")
-            _a(f"- **Overall Average:** "
-               f"{trend_data.get('overall_avg', 'N/A')}")
-            delta = trend_data.get("delta", 0)
-            sign = "+" if delta >= 0 else ""
-            _a(f"- **Trend:** {trend_data['trend'].title()} "
-               f"({sign}{delta} pts)")
-            _a("")
-
-        _a("---\n")
-        _a("*Report generated by StudyWidgetApp Pattern Analyzer*\n")
-
-        content = "\n".join(lines)
         with open(output_path, "w", encoding="utf-8") as f:
-            f.write(content)
+            json.dump(report, f, indent=2)
 
         return os.path.abspath(output_path)
