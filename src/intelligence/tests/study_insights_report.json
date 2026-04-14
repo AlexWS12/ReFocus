@@ -1,0 +1,271 @@
+{
+  "generated_at": "2026-04-14T16:30:56.078056",
+  "session_count": 20,
+  "date_range": {
+    "first": "2026-03-04",
+    "last": "2026-03-23"
+  },
+  "summary": {
+    "overall_avg_score": 80.3,
+    "score_trajectory": {
+      "direction": "stable",
+      "slope_per_session": 0.18
+    }
+  },
+  "insights": [
+    "You focus best in the morning (avg score 89 across 12 sessions).",
+    "Your sweet spot is over 90 minutes sessions (avg score 85).",
+    "Looking Away is your most frequent distraction (32 events, 36% of total).",
+    "Your sharpest hour is around 10 AM (avg score 94)."
+  ],
+  "time_of_day": {
+    "best_period": "morning",
+    "buckets": {
+      "morning": {
+        "count": 12,
+        "avg_score": 89.1,
+        "avg_focus_pct": 88.2
+      },
+      "afternoon": {
+        "count": 7,
+        "avg_score": 67.9,
+        "avg_focus_pct": 74.3
+      },
+      "evening": {
+        "count": 1,
+        "avg_score": 62.0,
+        "avg_focus_pct": 70.0
+      },
+      "night": {
+        "count": 0,
+        "avg_score": null,
+        "avg_focus_pct": null
+      }
+    }
+  },
+  "session_length": {
+    "best_length": "marathon",
+    "buckets": {
+      "short": {
+        "count": 0,
+        "avg_score": null,
+        "avg_focus_pct": null
+      },
+      "medium": {
+        "count": 3,
+        "avg_score": 67.7,
+        "avg_focus_pct": 76.7
+      },
+      "long": {
+        "count": 7,
+        "avg_score": 79.4,
+        "avg_focus_pct": 81.4
+      },
+      "marathon": {
+        "count": 10,
+        "avg_score": 84.7,
+        "avg_focus_pct": 84.8
+      }
+    }
+  },
+  "distractions": {
+    "most_frequent": "Looking Away",
+    "most_impactful": "Looking Away",
+    "total_events": 89,
+    "ranked_by_count": [
+      {
+        "type": "Looking Away",
+        "column": "look_away_distractions",
+        "total_events": 32,
+        "pct_of_all_events": 36.0
+      },
+      {
+        "type": "App Switch",
+        "column": "app_distractions",
+        "total_events": 25,
+        "pct_of_all_events": 28.1
+      },
+      {
+        "type": "Phone",
+        "column": "phone_distractions",
+        "total_events": 17,
+        "pct_of_all_events": 19.1
+      },
+      {
+        "type": "Left Desk",
+        "column": "left_desk_distractions",
+        "total_events": 14,
+        "pct_of_all_events": 15.7
+      },
+      {
+        "type": "Idle",
+        "column": "idle_distractions",
+        "total_events": 1,
+        "pct_of_all_events": 1.1
+      }
+    ]
+  },
+  "trend": {
+    "trend": "stable",
+    "delta": 2.1,
+    "recent_avg": 82.4,
+    "overall_avg": 80.3,
+    "rolling_avg": [
+      82.0,
+      86.5,
+      79.3,
+      84.0,
+      79.2,
+      81.6,
+      76.0,
+      80.8,
+      72.8,
+      79.2,
+      78.0,
+      79.4,
+      80.8,
+      80.2,
+      80.4,
+      75.2,
+      80.6,
+      77.0,
+      84.0,
+      82.4
+    ]
+  },
+  "peak_focus": {
+    "hourly_avg": {
+      "9": 92.2,
+      "14": 84.5,
+      "8": 81.3,
+      "10": 94.3,
+      "13": 65.0,
+      "15": 59.0
+    },
+    "peak_hour": 10
+  },
+  "ml_feature_importance": {
+    "r2_score": 0.954,
+    "top_factor": "Phone Distractions",
+    "features": [
+      {
+        "feature": "phone_distractions",
+        "label": "Phone Distractions",
+        "importance": 0.4608,
+        "importance_pct": 46.1
+      },
+      {
+        "feature": "hour",
+        "label": "Time of Day (Hour)",
+        "importance": 0.3324,
+        "importance_pct": 33.2
+      },
+      {
+        "feature": "look_away_distractions",
+        "label": "Look-Away Distractions",
+        "importance": 0.0825,
+        "importance_pct": 8.2
+      },
+      {
+        "feature": "duration",
+        "label": "Session Duration",
+        "importance": 0.0429,
+        "importance_pct": 4.3
+      },
+      {
+        "feature": "day_of_week",
+        "label": "Day of Week",
+        "importance": 0.0314,
+        "importance_pct": 3.1
+      },
+      {
+        "feature": "left_desk_distractions",
+        "label": "Left Desk Distractions",
+        "importance": 0.0304,
+        "importance_pct": 3.0
+      },
+      {
+        "feature": "app_distractions",
+        "label": "App Distractions",
+        "importance": 0.012,
+        "importance_pct": 1.2
+      },
+      {
+        "feature": "idle_distractions",
+        "label": "Idle Distractions",
+        "importance": 0.0077,
+        "importance_pct": 0.8
+      }
+    ]
+  },
+  "ml_clusters": {
+    "n_clusters": 3,
+    "clusters": [
+      {
+        "cluster_id": 0,
+        "label": "High Focus",
+        "session_count": 11,
+        "avg_score": 92.1,
+        "avg_duration_min": 79.1,
+        "avg_hour": 10,
+        "avg_distractions": 2.8,
+        "session_ids": [
+          2,
+          4,
+          6,
+          8,
+          10,
+          11,
+          13,
+          15,
+          17,
+          19,
+          20
+        ]
+      },
+      {
+        "cluster_id": 2,
+        "label": "Moderate Focus",
+        "session_count": 1,
+        "avg_score": 82.0,
+        "avg_duration_min": 90.0,
+        "avg_hour": 9,
+        "avg_distractions": 6.0,
+        "session_ids": [
+          1
+        ]
+      },
+      {
+        "cluster_id": 1,
+        "label": "Needs Improvement",
+        "session_count": 8,
+        "avg_score": 63.9,
+        "avg_duration_min": 69.4,
+        "avg_hour": 14,
+        "avg_distractions": 6.5,
+        "session_ids": [
+          3,
+          5,
+          7,
+          9,
+          12,
+          14,
+          16,
+          18
+        ]
+      }
+    ]
+  },
+  "ml_forecast": {
+    "direction": "stable",
+    "slope": 0.18,
+    "r2_score": 0.005,
+    "predicted_next_5": [
+      82.2,
+      82.4,
+      82.6,
+      82.8,
+      83.0
+    ]
+  }
+}

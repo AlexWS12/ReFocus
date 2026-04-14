@@ -8,7 +8,10 @@ from sklearn.cluster import KMeans
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
 
-from src.intelligence.database import get_database
+try:
+    from src.intelligence.database import get_database
+except ImportError:
+    from database import get_database
 
 
 MIN_SESSIONS_REQUIRED = 10
