@@ -58,6 +58,12 @@ class DistractionImportancePanel(DistractionPerTypeFieldsPanel):
                 result[dtype] = saved[dtype]
         return result
 
+    def set_weights(self, weights: dict[DistractionType, float]) -> None:
+        """Populate weight fields from the given dict."""
+        for dtype, field in self.fields.items():
+            if dtype in weights:
+                field.setText(str(weights[dtype]))
+
 
 class DetectionThresholdsPanel(QFrame):
     """Editable fields for phone-detection and gaze-angle thresholds.
@@ -136,7 +142,11 @@ class DetectionThresholdsPanel(QFrame):
 
 
 class DistractionCountSecondsPanel(DistractionPerTypeFieldsPanel):
-    """Seconds before each distraction type starts counting (skeleton)."""
+    """Seconds before each distraction type starts counting (skeleton).
+
+    # TODO: Wire to settings_manager (persist/load values) and include in
+    #       profile save/load once the distraction-delay logic is implemented.
+    """
 
     def __init__(self, parent=None):
         super().__init__("Seconds before distraction counts", "Seconds", parent)

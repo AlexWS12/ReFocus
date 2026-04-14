@@ -39,3 +39,8 @@ class DistractionToggles(QFrame):
     def get_enabled_types(self) -> set[DistractionType]:
         """Return the set of distraction types currently checked."""
         return {dtype for dtype, cb in self.checks.items() if cb.isChecked()}
+
+    def set_enabled_types(self, enabled: set[DistractionType]) -> None:
+        """Update checkboxes to match the given set."""
+        for dtype, cb in self.checks.items():
+            cb.setChecked(dtype in enabled)

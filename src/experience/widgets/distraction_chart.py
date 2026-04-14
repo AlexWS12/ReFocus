@@ -53,8 +53,10 @@ class DistractionChart(QFrame):
             self._chart.removeAxis(axis)
 
         if pa is None:
+            self._info_label.setStyleSheet("font-size: 15px;")
             self._info_label.setText("Need 10+ sessions for analysis")
             return
+        self._info_label.setStyleSheet("")
 
         ranked = pa.get("distractions", {}).get("ranked_by_count", [])
         ranked = [r for r in ranked if r["total_events"] > 0]

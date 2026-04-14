@@ -29,17 +29,28 @@ _DEFAULT_DETECTION_THRESHOLDS = {
 }
 
 _DEFAULTS = {
+    "active_profile": None,
+    "profiles": {},
     "enabled_distractions": [dt.value for dt in DistractionType],
     "distraction_weights": dict(_DEFAULT_WEIGHTS),
     "detection_thresholds": dict(_DEFAULT_DETECTION_THRESHOLDS),
+    "used_dark_mode": False,
 }
 
 
 def _deep_merge(defaults: dict, loaded: dict) -> dict:
-    """Return *defaults* with any keys present in *loaded* overwritten."""
+    """Return *defaults* with any keys present in *loaded* overwritten.
+
+    Top-level dict values (e.g. profiles, detection_thresholds) are merged
+    key-by-key so that new default sub-keys appear without wiping loaded data.
+    """
     merged = dict(defaults)
     for key, value in loaded.items():
-        if key in merged:
+        if key not in merged:
+            continue
+        if isinstance(merged[key], dict) and isinstance(value, dict):
+            merged[key] = {**merged[key], **value}
+        else:
             merged[key] = value
     return merged
 
@@ -98,6 +109,37 @@ def detection_thresholds() -> dict[str, float | None]:
             except (ValueError, TypeError):
                 result[key] = default
     return result
+
+
+def list_profiles() -> list[str]:
+    """Return sorted profile names."""
+    return sorted(load().get("profiles", {}).keys())
+
+
+def load_profile(name: str) -> dict | None:
+    """Return the settings snapshot for a named profile, or None if not found."""
+    return load().get("profiles", {}).get(name)
+
+
+def save_profile(name: str, profile: dict) -> None:
+    """Save or overwrite a named profile. Profile contains thresholds, enabled_distractions, distraction_weights."""
+    settings = load()
+    settings.setdefault("profiles", {})[name] = profile
+    settings["active_profile"] = name
+    save(settings)
+
+
+def delete_profile(name: str) -> None:
+    """Remove a named profile. Clears active_profile if it was the deleted one."""
+    settings = load()
+    settings.get("profiles", {}).pop(name, None)
+    if settings.get("active_profile") == name:
+        settings["active_profile"] = None
+    save(settings)
+
+
+def active_profile_name() -> str | None:
+    return load().get("active_profile")
 
 
 def distraction_weights() -> dict[DistractionType, float]:

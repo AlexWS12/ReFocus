@@ -42,6 +42,7 @@ class Database:
         # events                  - total number of distraction events
         # time_away               - total time spent away from the desk in seconds
         # look_away_time          - total time spent looking away from the screen in seconds
+        # phone_time              - total time spent on phone distractions in seconds
         # distraction_time        - total time spent distracted in seconds
         # phone_distractions      - distractions caused by phone use
         # look_away_distractions  - distractions caused by looking away from the screen
@@ -63,6 +64,7 @@ class Database:
                 events INTEGER DEFAULT 0,
                 time_away INTEGER DEFAULT 0,
                 look_away_time INTEGER DEFAULT 0,
+                phone_time INTEGER DEFAULT 0,
                 distraction_time INTEGER DEFAULT 0,
                 phone_distractions INTEGER DEFAULT 0,
                 look_away_distractions INTEGER DEFAULT 0,
@@ -75,6 +77,14 @@ class Database:
                 coins_earned INTEGER DEFAULT 0
             )
         ''')
+
+        # Lightweight schema migration for existing local databases created before
+        # the phone-time breakdown existed.
+        existing_columns = {
+            row["name"] for row in cursor.execute("PRAGMA table_info(sessions)").fetchall()
+        }
+        if "phone_time" not in existing_columns:
+            cursor.execute("ALTER TABLE sessions ADD COLUMN phone_time INTEGER DEFAULT 0")
 
 
     def _create_user_stats_table(self):

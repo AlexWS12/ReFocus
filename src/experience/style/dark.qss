@@ -34,6 +34,15 @@ QWidget#pageRoot QLabel {
     background-color: transparent;
 }
 
+QWidget#reportContainer,
+QWidget#reportChartsContainer {
+    background-color: #0f1b2d;
+}
+
+QWidget#achievementsContainer {
+    background-color: #0f1b2d;
+}
+
 QWidget#sidebar {
     background-color: #111827;
     color: #ffffff;
