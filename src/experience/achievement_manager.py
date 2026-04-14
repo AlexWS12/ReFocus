@@ -34,7 +34,7 @@ class Achievement_Manager():
             "First Step": analytics["total_sessions"],
             "On A Roll": max(counts.values()) if day_counts else 0,
             "Grind Mode": analytics["lifetime_focus_seconds"] // 3600,
-            "Marathon": analytics["longest_focus_seconds"],
+            "Marathon": analytics["longest_focus_seconds"] // 3600,
             "Consistent": streak,
             "Dedicated": streak,
             "Unstoppable": streak,
