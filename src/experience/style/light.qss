@@ -15,6 +15,11 @@ QWidget#mainContent {
     background-color: rgb(255, 255, 255);
 }
 
+QWidget#reportContainer,
+QWidget#reportChartsContainer {
+    background-color: #ffffff;
+}
+
 QWidget#achievementsContainer {
     background-color: #f4f6fb;
 }
@@ -81,7 +86,7 @@ QWidget#sidebar QPushButton:hover {
 }
 
 QFrame#statCard {
-    background-color: #f4f6fb;
+    background-color: #ffffff;
     border: 1px solid #dde3f0;
     border-radius: 10px;
 }

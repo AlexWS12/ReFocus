@@ -54,8 +54,10 @@ class FocusTrendChart(QFrame):
             self._chart.removeAxis(axis)
 
         if pa is None:
+            self._trend_label.setStyleSheet("font-size: 15px;")
             self._trend_label.setText("Need 10+ sessions for trend analysis")
             return
+        self._trend_label.setStyleSheet("")
 
         trend_data = pa.get("trend", {})
         rolling = trend_data.get("rolling_avg", [])
