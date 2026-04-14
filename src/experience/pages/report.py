@@ -13,6 +13,7 @@ from src.experience.widgets.distraction_chart import DistractionChart
 from src.experience.widgets.time_of_day_chart import TimeOfDayChart
 from src.experience.widgets.session_length_chart import SessionLengthChart
 from src.experience.widgets.peak_hours_chart import PeakHoursChart
+from src.experience.widgets.report_pet_widget import ReportPetWidget
 
 
 class Report(QWidget):
@@ -28,7 +29,7 @@ class Report(QWidget):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
 
-        scroll = QScrollArea()
+        scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         outer.addWidget(scroll)
@@ -65,6 +66,13 @@ class Report(QWidget):
         charts_grid.addWidget(self.peak_hours_chart, 1, 1)
         self._layout.addWidget(charts_section)
 
+        # Floating pet-insight panel pinned to the report page corner.
+        self.pet_widget = ReportPetWidget(self)
+        self.pet_widget.layout_changed.connect(self._position_pet_widget)
+        self.pet_widget.raise_()
+        self.pet_widget.refresh(self.data)
+        self._position_pet_widget()
+
     def showEvent(self, event):
         super().showEvent(event)
         self.data = self.app.database_reader.load_report_data()
@@ -78,3 +86,17 @@ class Report(QWidget):
         self.time_of_day_chart.refresh(self.data)
         self.session_length_chart.refresh(self.data)
         self.peak_hours_chart.refresh(self.data)
+        self.pet_widget.refresh(self.data)
+        self._position_pet_widget()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._position_pet_widget()
+
+    def _position_pet_widget(self):
+        margin = 16
+        self.pet_widget.adjustSize()
+        x = self.width() - self.pet_widget.width() - margin
+        y = self.height() - self.pet_widget.height() - margin
+        self.pet_widget.move(max(0, x), max(0, y))
+        self.pet_widget.raise_()
