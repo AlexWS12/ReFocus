@@ -9,6 +9,7 @@ Or directly:
     python src/intelligence/tests/test_pattern_analysis.py
 """
 
+import json
 import os
 import pytest
 
@@ -275,41 +276,39 @@ class TestMLForecast:
 # Markdown report generation
 # ---------------------------------------------------------------------------
 
-class TestMarkdownReport:
+class TestInsightsReport:
 
     def test_report_is_written(self, analyzer_mock, tmp_path):
-        out = str(tmp_path / "report.md")
-        returned_path = analyzer_mock.generate_markdown_report(out)
+        out = str(tmp_path / "report.json")
+        returned_path = analyzer_mock.generate_insights_report(out)
         assert returned_path is not None
         assert os.path.exists(out)
 
     def test_report_contains_key_sections(self, analyzer_mock, tmp_path):
-        out = str(tmp_path / "report.md")
-        analyzer_mock.generate_markdown_report(out)
-        content = open(out, encoding="utf-8").read()
-        for heading in [
-            "# Study Session Pattern Analysis Report",
-            "## Summary",
-            "## Key Insights",
-            "## Machine Learning Analysis",
-            "### What Affects Your Focus Most",
-            "### Your Session Profiles",
-            "### Score Forecast",
-            "## Detailed Breakdowns",
+        out = str(tmp_path / "report.json")
+        analyzer_mock.generate_insights_report(out)
+        data = json.load(open(out, encoding="utf-8"))
+        for key in [
+            "generated_at", "session_count", "date_range", "summary",
+            "insights", "time_of_day", "session_length", "distractions",
+            "trend", "peak_focus", "ml_feature_importance",
+            "ml_clusters", "ml_forecast",
         ]:
-            assert heading in content, f"Missing section: {heading}"
+            assert key in data, f"Missing key: {key}"
 
-    def test_report_contains_ml_table(self, analyzer_mock, tmp_path):
-        out = str(tmp_path / "report.md")
-        analyzer_mock.generate_markdown_report(out)
-        content = open(out, encoding="utf-8").read()
-        # Feature importance table should have rank column
-        assert "| Rank | Factor | Importance |" in content
+    def test_report_contains_ml_features(self, analyzer_mock, tmp_path):
+        out = str(tmp_path / "report.json")
+        analyzer_mock.generate_insights_report(out)
+        data = json.load(open(out, encoding="utf-8"))
+        features = data["ml_feature_importance"]["features"]
+        assert len(features) > 0
+        assert "label" in features[0]
+        assert "importance_pct" in features[0]
 
     def test_empty_db_report_returns_none(self, analyzer_empty):
-        result = analyzer_empty.generate_markdown_report("should_not_exist.md")
+        result = analyzer_empty.generate_insights_report("should_not_exist.json")
         assert result is None
-        assert not os.path.exists("should_not_exist.md")
+        assert not os.path.exists("should_not_exist.json")
 
 
 if __name__ == "__main__":

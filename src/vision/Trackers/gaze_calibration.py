@@ -200,6 +200,7 @@ class GazeCalibrator:
         }
 
         self.tracker.set_calibration_profile(profile)
+        self._sync_thresholds_to_settings(yaw_min, yaw_max, pitch_min, pitch_max, roll_threshold)
 
         return {
             "success": True,
@@ -212,6 +213,40 @@ class GazeCalibrator:
             "roll_threshold_deg": profile["roll_threshold_deg"],
             "calibration_file": self.tracker.calibration_file,
         }
+
+    def _sync_thresholds_to_settings(
+        self,
+        yaw_min: float,
+        yaw_max: float,
+        pitch_min: float,
+        pitch_max: float,
+        roll_threshold: float,
+    ) -> None:
+        """Persist calibrated gaze thresholds to settings.json for UI display and user tweaking.
+
+        Yaw and pitch bounds are asymmetric (min/max), so we store the larger
+        absolute extent as the single representative threshold — this is the value
+        the user will see and can nudge in the settings panel.
+        """
+        try:
+            for module_path in ("src.core.settings_manager", "core.settings_manager"):
+                try:
+                    import importlib
+                    sm = importlib.import_module(module_path)
+                    break
+                except ModuleNotFoundError:
+                    continue
+            else:
+                return
+
+            settings = sm.load()
+            thresholds = settings.setdefault("detection_thresholds", {})
+            thresholds["yaw_threshold_deg"] = round(max(abs(yaw_min), abs(yaw_max)), 2)
+            thresholds["pitch_threshold_deg"] = round(max(abs(pitch_min), abs(pitch_max)), 2)
+            thresholds["roll_threshold_deg"] = round(roll_threshold, 2)
+            sm.save(settings)
+        except Exception:
+            pass  # Never crash calibration over a settings write failure
 
 
 if __name__ == "__main__":

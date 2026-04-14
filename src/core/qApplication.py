@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, Signal, QObject
 
 from src.experience.main_window import MainWindow
 from src.experience.pet_window import petWindow
@@ -10,9 +10,15 @@ from src.intelligence.session_manager import SessionManager
 
 from pathlib import Path
 
+
+class AppSignals(QObject):
+    pet_appearance_changed = Signal()
+
+
 class QApplication(QApplication):
     def __init__(self):
         super().__init__()
+        self.signals = AppSignals()
 
         settings_manager.ensure_defaults()
 
@@ -32,6 +38,7 @@ class QApplication(QApplication):
         self.open_pet_window()
         QTimer.singleShot(0, self.position_pet_window)
         self.aboutToQuit.connect(self.vision_manager.stop_session)
+        self.vision_manager.distraction_started.connect(self.pet_window.show_speech_bubble)
 
     def run(self):
         self.exec()

@@ -55,8 +55,10 @@ class SessionLengthChart(QFrame):
             self._chart.removeAxis(axis)
 
         if pa is None:
+            self._info_label.setStyleSheet("font-size: 15px;")
             self._info_label.setText("Need 10+ sessions for analysis")
             return
+        self._info_label.setStyleSheet("")
 
         sl = pa.get("session_length", {})
         buckets = sl.get("buckets", {})

@@ -34,6 +34,7 @@ class Report(QWidget):
         outer.addWidget(scroll)
 
         container = QWidget()
+        container.setObjectName("reportContainer")
         self._layout = QVBoxLayout(container)
         scroll.setWidget(container)
 
@@ -51,7 +52,9 @@ class Report(QWidget):
         self.focus_trend = FocusTrendChart(self)
         self._layout.addWidget(self.focus_trend)
 
-        charts_grid = QGridLayout()
+        charts_section = QWidget()
+        charts_section.setObjectName("reportChartsContainer")
+        charts_grid = QGridLayout(charts_section)
         self.distraction_chart = DistractionChart(self)
         self.time_of_day_chart = TimeOfDayChart(self)
         self.session_length_chart = SessionLengthChart(self)
@@ -60,7 +63,7 @@ class Report(QWidget):
         charts_grid.addWidget(self.time_of_day_chart, 0, 1)
         charts_grid.addWidget(self.session_length_chart, 1, 0)
         charts_grid.addWidget(self.peak_hours_chart, 1, 1)
-        self._layout.addLayout(charts_grid)
+        self._layout.addWidget(charts_section)
 
     def showEvent(self, event):
         super().showEvent(event)

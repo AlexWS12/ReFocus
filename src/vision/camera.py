@@ -126,18 +126,24 @@ class Camera:
         self.few_shot_bundle_path = _get_phone_calibration_cls().get_few_shot_bundle_path()
         self.calibrated = False  # True after a successful phone calibration run
 
-        # Frame-skip controls: YOLO only runs every Nth frame.
+        # Frame-skip controls: YOLO and MediaPipe both run every Nth frame.
         # ByteTrack maintains bounding-box continuity on skipped frames, so
         # detections stay smooth without paying inference cost every frame.
-        self.yolo_frame_skip = 3       # Run YOLO on frame 0, 3, 6, … (tune up for speed, down for accuracy)
-        self._yolo_frame_counter = 0   # Counts total frames seen; used to decide when to re-run YOLO
+        self.frame_skip = 3            # Run detectors on frame 0, 3, 6, … (tune up for speed, down for accuracy)
+        self._frame_counter = 0        # Counts total frames seen; used to decide when to re-run detectors
         self._last_yolo_results = None # Cached result list reused on skipped frames
+        self._last_gaze_annotated = None  # Cached gaze overlay reused on skipped frames
+
+        # FPS cap: sleep at the top of read_frame() to maintain a consistent frame rate.
+        self.target_fps = 30
+        self._last_frame_time: float = 0.0  # wall-clock time of the previous read_frame() call
 
         # Distraction tracking: each event is defined by a start time and a
         # "last seen" time.  When the trigger disappears, a cooldown window
         # keeps the event open so brief flickers don't split one distraction
         # into many.  Duration is measured start → last_seen (not start → now).
         self._session_manager = session_manager
+        self._on_distraction_started = None  # callback(distraction_type_str) set by VisionManager
         self._DISTRACTION_COOLDOWN = 5.0  # seconds of absence before an event is finalized and logged
         self._LEFT_DESK_TRANSITION_SECONDS = 10.0  # promote no-face look-away to left-desk after continuous absence
         self._phone_distraction_start: float | None = None  # wall-clock time the current phone event opened
@@ -364,6 +370,14 @@ class Camera:
         3. Appearance filter — few-shot cosine-similarity gate when calibrated.
         4. Best-confidence selection.
         """
+        # Enforce FPS cap: sleep for whatever time remains in the current frame budget.
+        now = time.time()
+        elapsed = now - self._last_frame_time
+        frame_budget = 1.0 / self.target_fps
+        if elapsed < frame_budget:
+            time.sleep(frame_budget - elapsed)
+        self._last_frame_time = time.time()
+
         ret, frame = self.cap.read()
         if not ret:
             return None
@@ -389,11 +403,16 @@ class Camera:
         else:
             guide_x1 = guide_y1 = guide_x2 = guide_y2 = None
 
+        # --- Detector frame-skip decision ---
+        # Both YOLO and MediaPipe run on the same cadence; cached results fill skipped frames.
+        run_detectors = self._frame_counter % self.frame_skip == 0 or self._last_yolo_results is None
+        self._frame_counter += 1
+
         # --- YOLO detection (frame-skipped) ---
         # stream=True yields results lazily, reducing peak memory allocation.
         # On skipped frames the cached result is reused; ByteTrack maintains continuity.
         yolo_conf = self.yolo_conf_threshold or self.detection_params.get("conf", 0.35)
-        if self._yolo_frame_counter % self.yolo_frame_skip == 0 or self._last_yolo_results is None:
+        if run_detectors:
             self._last_yolo_results = list(
                 self.model(
                     frame,
@@ -404,12 +423,10 @@ class Camera:
                     stream=True,  # Lazy generator — reduces peak memory vs returning a list directly
                 )
             )
-        self._yolo_frame_counter += 1
 
         # --- Spatial + appearance filtering; pick best candidate ---
         best_coords = None
         best_conf = -1.0
-        best_similarity = 0.0
         best_is_fallback = False
         fallback_coords = None
         fallback_conf = -1.0
@@ -450,13 +467,11 @@ class Camera:
             if conf > best_conf:
                 best_conf = conf
                 best_coords = (x1, y1, x2, y2)
-                best_similarity = similarity
 
         # Fallback: use high-confidence detection even if appearance gate rejected it
         if best_coords is None and fallback_coords is not None:
             best_coords = fallback_coords
             best_conf = fallback_conf
-            best_similarity = 0.0  # Indicate it's a fallback
             best_is_fallback = True
 
         # --- Annotate ---
@@ -488,9 +503,12 @@ class Camera:
                 2,
             )
 
-        # --- Eye / gaze tracking ---
-        # gazeTracker internally throttles to ~5 Hz; on skipped frames it returns the cached overlay
-        annotated = self.eye_tracker.track_eyes(annotated)
+        # --- Eye / gaze tracking (frame-skipped) ---
+        # On active frames, run MediaPipe and cache the result.
+        # On skipped frames, reuse the last annotated overlay.
+        if run_detectors or self._last_gaze_annotated is None:
+            self._last_gaze_annotated = self.eye_tracker.track_eyes(annotated)
+        annotated = self._last_gaze_annotated
 
         # --- Distraction event logging ---
         # Fallback detections are intentionally visual-only; they help with overlay
@@ -578,6 +596,8 @@ class Camera:
         if phone_detected:
             if self._phone_distraction_start is None:
                 self._phone_distraction_start = now  # open a new event on first detection
+                if self._on_distraction_started:
+                    self._on_distraction_started("PHONE_DISTRACTION")
             self._phone_last_seen = now  # keep refreshing so the cooldown resets each frame
         elif self._phone_distraction_start is not None:
             # Phone is gone but the event is still open — wait out the cooldown before logging.
@@ -633,6 +653,8 @@ class Camera:
                 # Keep the look-away event open while we wait for the promotion threshold.
                 if self._look_away_distraction_start is None:
                     self._look_away_distraction_start = now
+                    if self._on_distraction_started:
+                        self._on_distraction_started("LOOK_AWAY_DISTRACTION")
                 self._look_away_last_seen = now
 
                 # Promote only once the face has been continuously absent for the full threshold.
@@ -641,6 +663,8 @@ class Camera:
                     self._left_desk_last_seen = now
                     self._look_away_distraction_start = None
                     self._look_away_last_seen = None
+                    if self._on_distraction_started:
+                        self._on_distraction_started("LEFT_DESK_DISTRACTION")
             else:
                 # Already transitioned; keep extending the left-desk event.
                 self._left_desk_last_seen = now
@@ -663,6 +687,8 @@ class Camera:
             if looking_away:
                 if self._look_away_distraction_start is None:
                     self._look_away_distraction_start = now
+                    if self._on_distraction_started:
+                        self._on_distraction_started("LOOK_AWAY_DISTRACTION")
                 self._look_away_last_seen = now
             elif self._look_away_distraction_start is not None:
                 if now - self._look_away_last_seen >= self._DISTRACTION_COOLDOWN:

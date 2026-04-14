@@ -24,7 +24,9 @@ class Database:
         self._create_events_table()
         self._create_achievements_table()
         self._create_user_settings_table() # New table for user settings to control distraction type toggles
+        self._create_inventory_table()
         self._migrate_sessions_table()
+        self._migrate_current_pet_default()
         self.conn.commit()
 
 
@@ -40,6 +42,7 @@ class Database:
         # events                  - total number of distraction events
         # time_away               - total time spent away from the desk in seconds
         # look_away_time          - total time spent looking away from the screen in seconds
+        # phone_time              - total time spent on phone distractions in seconds
         # distraction_time        - total time spent distracted in seconds
         # phone_distractions      - distractions caused by phone use
         # look_away_distractions  - distractions caused by looking away from the screen
@@ -61,6 +64,7 @@ class Database:
                 events INTEGER DEFAULT 0,
                 time_away INTEGER DEFAULT 0,
                 look_away_time INTEGER DEFAULT 0,
+                phone_time INTEGER DEFAULT 0,
                 distraction_time INTEGER DEFAULT 0,
                 phone_distractions INTEGER DEFAULT 0,
                 look_away_distractions INTEGER DEFAULT 0,
@@ -73,6 +77,14 @@ class Database:
                 coins_earned INTEGER DEFAULT 0
             )
         ''')
+
+        # Lightweight schema migration for existing local databases created before
+        # the phone-time breakdown existed.
+        existing_columns = {
+            row["name"] for row in cursor.execute("PRAGMA table_info(sessions)").fetchall()
+        }
+        if "phone_time" not in existing_columns:
+            cursor.execute("ALTER TABLE sessions ADD COLUMN phone_time INTEGER DEFAULT 0")
 
 
     def _create_user_stats_table(self):
@@ -202,6 +214,32 @@ class Database:
         ''')
         # Seed the singleton row so reads always find a record (same as user_stats)
         cursor.execute("INSERT OR IGNORE INTO user_settings (id) VALUES (1)")
+
+    def _create_inventory_table(self):
+        cursor = self._get_connection().cursor()
+
+        # Tracks which pets (and later accessories) the user owns.
+        # item_type  - 'pet' or 'accessory'
+        # item_id    - key from PET_CATALOG / ACCESSORY_CATALOG
+        # acquired_at - ISO 8601 timestamp of purchase
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS inventory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_type TEXT NOT NULL,
+                item_id TEXT NOT NULL,
+                acquired_at TEXT,
+                UNIQUE(item_type, item_id)
+            )
+        ''')
+        cursor.execute(
+            "INSERT OR IGNORE INTO inventory (item_type, item_id) VALUES ('pet', 'cat')"
+        )
+
+    def _migrate_current_pet_default(self):
+        cursor = self._get_connection().cursor()
+        cursor.execute(
+            "UPDATE user_stats SET current_pet = 'cat' WHERE id = 1 AND current_pet IN ('default', 'panther')"
+        )
 
     def _migrate_sessions_table(self):
         # Schema migration: add the enabled_distractions column to the existing

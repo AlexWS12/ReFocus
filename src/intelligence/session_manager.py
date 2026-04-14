@@ -2,7 +2,14 @@ import json
 import time
 import math
 from enum import Enum
-
+try:
+    from src.intelligence.database import get_database
+    from src.core import settings_manager
+    from src.intelligence.pattern_analysis import PatternAnalyzer
+except ImportError:
+    from database import get_database
+    from pattern_analysis import PatternAnalyzer
+    settings_manager = None
 
 class SessionState(Enum):
     READY = "ready"
@@ -252,7 +259,8 @@ class SessionManager:
         # ensures that if _enabled_types was never set (shouldn't happen), we fall
         # back to allowing everything rather than blocking everything.
         if self._enabled_types is not None and dtype not in self._enabled_types:
-            return
+            if dtype not in self.enabled_distractions:
+                return
         self.distraction_events.append({
             "type": dtype,
             "time": duration_seconds, 
@@ -301,8 +309,10 @@ class SessionManager:
         idle_count      = get(DistractionType.IDLE_DISTRACTION,      "count")
 
         # Per-type times for the time-based columns
+        # phone_time     = time spent with a phone distraction active
         # time_away      = left desk time (physically absent from desk)
         # look_away_time = look away time (eyes off screen but still at desk)
+        phone_time     = get(DistractionType.PHONE_DISTRACTION, "time")
         time_away      = get(DistractionType.LEFT_DESK_DISTRACTION, "time")
         look_away_time = get(DistractionType.LOOK_AWAY_DISTRACTION, "time")
 
@@ -333,7 +343,7 @@ class SessionManager:
             UPDATE sessions SET
                 end_time=?, duration=?, score=?,
                 focused_time=?, events=?, distraction_time=?,
-                time_away=?, look_away_time=?,
+                time_away=?, look_away_time=?, phone_time=?,
                 phone_distractions=?, look_away_distractions=?,
                 left_desk_distractions=?, app_distractions=?, idle_distractions=?,
                 focus_percentage=?,
@@ -344,7 +354,7 @@ class SessionManager:
             time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime(self.session_end_time)),
             duration, score,
             focused_time, total_events, distraction_time,
-            time_away, look_away_time,
+            time_away, look_away_time, phone_time,
             phone_count, look_away_count, left_desk_count, app_count, idle_count,
             focus_percentage,
             points_earned, coins_earned,
@@ -361,6 +371,19 @@ class SessionManager:
         self.db.commit()
 
         self.session_state = SessionState.ENDED
+
+        # --- Report generation ---
+        # Read the total session count BEFORE this session was added so
+        # should_update() can decide whether the insights report is due.
+        cursor.execute("SELECT total_sessions FROM user_stats WHERE id = 1")
+        row = cursor.fetchone()
+        # total_sessions was already incremented by _update_user_stats(), so
+        # last_analyzed_count is the count from before this session.
+        last_analyzed_count = (row["total_sessions"] - 1) if row else 0
+
+        analyzer = PatternAnalyzer()
+        analyzer.generate_session_report(self.current_session_id)
+        analyzer.generate_insights_report(last_analyzed_count=last_analyzed_count)
         # Session data is intentionally kept in memory (current_session_id, distraction_events)
         # until reset() is explicitly called, so session_report() can still be accessed after end.
 
@@ -524,6 +547,7 @@ class SessionManager:
             "events":                 session_data["events"],
             "time_away":              session_data["time_away"],
             "look_away_time":         session_data["look_away_time"],
+            "phone_time":             session_data["phone_time"],
             "distraction_time":       session_data["distraction_time"],
             "phone_distractions":     session_data["phone_distractions"],
             "look_away_distractions": session_data["look_away_distractions"],

@@ -20,8 +20,8 @@ class MainWindow(QMainWindow):
 
         # set up the main window
         self.setWindowTitle("Study Tracker Partner")
-        self.setMinimumWidth(800)
-        self.setMinimumHeight(600)
+        self.setMinimumWidth(860)
+        self.setMinimumHeight(700)
 
         # main container for the main window
         self.main_container = QWidget()
@@ -54,8 +54,8 @@ class MainWindow(QMainWindow):
         # intialize stacked pages
         self.pages_stack = QStackedWidget()
         self.pages_stack.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.pages_stack.setMaximumWidth(800)
-        self.pages_stack.setMaximumHeight(600)
+        self.pages_stack.setMaximumWidth(860)
+        self.pages_stack.setMaximumHeight(700)
 
         # add pages to stack
         self.pages_stack.addWidget(Dashboard(self))
