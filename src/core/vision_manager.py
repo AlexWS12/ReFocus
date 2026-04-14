@@ -17,6 +17,7 @@ class VisionManager(QObject):
 
     frame_ready = Signal(object)
     stream_state_changed = Signal(bool)
+    distraction_started = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -58,8 +59,13 @@ class VisionManager(QObject):
         self._force_stop()
         self._session_active = True
         self._camera = Camera(session_manager=session_manager)
+        self._camera._on_distraction_started = self._on_camera_distraction
         self._timer.start(30)
         self.stream_state_changed.emit(True)
+
+    def _on_camera_distraction(self, distraction_type: str) -> None:
+        """Bridge callback from Camera thread to Qt signal."""
+        self.distraction_started.emit(distraction_type)
 
     def stop_session(self) -> None:
         """Stop the camera when a session ends (flushes open distractions)."""

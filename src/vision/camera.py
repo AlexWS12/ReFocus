@@ -142,6 +142,7 @@ class Camera:
         # keeps the event open so brief flickers don't split one distraction
         # into many.  Duration is measured start → last_seen (not start → now).
         self._session_manager = session_manager
+        self._on_distraction_started = None  # callback(distraction_type_str) set by VisionManager
         self._DISTRACTION_COOLDOWN = 5.0  # seconds of absence before an event is finalized and logged
         self._LEFT_DESK_TRANSITION_SECONDS = 10.0  # promote no-face look-away to left-desk after continuous absence
         self._phone_distraction_start: float | None = None  # wall-clock time the current phone event opened
@@ -594,6 +595,8 @@ class Camera:
         if phone_detected:
             if self._phone_distraction_start is None:
                 self._phone_distraction_start = now  # open a new event on first detection
+                if self._on_distraction_started:
+                    self._on_distraction_started("PHONE_DISTRACTION")
             self._phone_last_seen = now  # keep refreshing so the cooldown resets each frame
         elif self._phone_distraction_start is not None:
             # Phone is gone but the event is still open — wait out the cooldown before logging.
@@ -649,6 +652,8 @@ class Camera:
                 # Keep the look-away event open while we wait for the promotion threshold.
                 if self._look_away_distraction_start is None:
                     self._look_away_distraction_start = now
+                    if self._on_distraction_started:
+                        self._on_distraction_started("LOOK_AWAY_DISTRACTION")
                 self._look_away_last_seen = now
 
                 # Promote only once the face has been continuously absent for the full threshold.
@@ -657,6 +662,8 @@ class Camera:
                     self._left_desk_last_seen = now
                     self._look_away_distraction_start = None
                     self._look_away_last_seen = None
+                    if self._on_distraction_started:
+                        self._on_distraction_started("LEFT_DESK_DISTRACTION")
             else:
                 # Already transitioned; keep extending the left-desk event.
                 self._left_desk_last_seen = now
@@ -679,6 +686,8 @@ class Camera:
             if looking_away:
                 if self._look_away_distraction_start is None:
                     self._look_away_distraction_start = now
+                    if self._on_distraction_started:
+                        self._on_distraction_started("LOOK_AWAY_DISTRACTION")
                 self._look_away_last_seen = now
             elif self._look_away_distraction_start is not None:
                 if now - self._look_away_last_seen >= self._DISTRACTION_COOLDOWN:
