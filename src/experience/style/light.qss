@@ -15,6 +15,10 @@ QWidget#mainContent {
     background-color: rgb(255, 255, 255);
 }
 
+QWidget#achievementsContainer {
+    background-color: #f4f6fb;
+}
+
 QCalendarWidget QToolButton {
     background-color: #f4f6fb;
     color: rgb(34, 34, 34);

@@ -99,3 +99,7 @@ class Settings(QWidget):
         else:
             self.app.load_stylesheet("dark.qss")
             self.app.style_path = "dark.qss"
+
+            settings = settings_manager.load()
+            settings["used_dark_mode"] = True
+            settings_manager.save(settings)
