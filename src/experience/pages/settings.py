@@ -82,6 +82,7 @@ class Settings(QWidget):
         self.calibrate_phone_btn.setEnabled(False)
         self.calibrate_gaze_btn.setEnabled(False)
         self.app.vision_manager.run_gaze_calibration()
+        self._refresh_thresholds()
         self.calibrate_phone_btn.setEnabled(True)
         self.calibrate_gaze_btn.setEnabled(True)
 
