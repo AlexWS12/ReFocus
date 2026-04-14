@@ -133,6 +133,10 @@ class Camera:
         self._last_yolo_results = None # Cached result list reused on skipped frames
         self._last_gaze_annotated = None  # Cached gaze overlay reused on skipped frames
 
+        # FPS cap: sleep at the top of read_frame() to maintain a consistent frame rate.
+        self.target_fps = 30
+        self._last_frame_time: float = 0.0  # wall-clock time of the previous read_frame() call
+
         # Distraction tracking: each event is defined by a start time and a
         # "last seen" time.  When the trigger disappears, a cooldown window
         # keeps the event open so brief flickers don't split one distraction
@@ -364,6 +368,14 @@ class Camera:
         3. Appearance filter — few-shot cosine-similarity gate when calibrated.
         4. Best-confidence selection.
         """
+        # Enforce FPS cap: sleep for whatever time remains in the current frame budget.
+        now = time.time()
+        elapsed = now - self._last_frame_time
+        frame_budget = 1.0 / self.target_fps
+        if elapsed < frame_budget:
+            time.sleep(frame_budget - elapsed)
+        self._last_frame_time = time.time()
+
         ret, frame = self.cap.read()
         if not ret:
             return None
@@ -413,7 +425,6 @@ class Camera:
         # --- Spatial + appearance filtering; pick best candidate ---
         best_coords = None
         best_conf = -1.0
-        best_similarity = 0.0
         best_is_fallback = False
         fallback_coords = None
         fallback_conf = -1.0
@@ -454,13 +465,11 @@ class Camera:
             if conf > best_conf:
                 best_conf = conf
                 best_coords = (x1, y1, x2, y2)
-                best_similarity = similarity
 
         # Fallback: use high-confidence detection even if appearance gate rejected it
         if best_coords is None and fallback_coords is not None:
             best_coords = fallback_coords
             best_conf = fallback_conf
-            best_similarity = 0.0  # Indicate it's a fallback
             best_is_fallback = True
 
         # --- Annotate ---
