@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea, QApplication,
+    QInputDialog, QMessageBox,
 )
 from PySide6.QtCore import Qt
 
@@ -74,8 +75,10 @@ class VirtualPet(QWidget):
         # ── Build cards ──────────────────────────────────────
         self._cards: dict[str, PetCard] = {}
         for pet_id, info in PET_CATALOG.items():
-            card = PetCard(pet_id, info["name"], info["sprite"], self)
+            custom_name = self.mgr.get_pet_name(pet_id)
+            card = PetCard(pet_id, custom_name, info["sprite"], self)
             card.clicked.connect(self._on_card_clicked)
+            card.purchaseClicked.connect(self._on_purchase_clicked)
             self.cards_layout.addWidget(card)
             self._cards[pet_id] = card
 
@@ -97,12 +100,13 @@ class VirtualPet(QWidget):
         owned = set(self.mgr.get_owned_pets())
         coins = self.mgr.get_coins()
 
-        pet_info = PET_CATALOG.get(active, {})
-        self.pet_name_label.setText(pet_info.get("name", ""))
+        self.pet_name_label.setText(self.mgr.get_active_pet_name())
         self.coins_label.setText(f"{coins} coins")
 
         for pet_id, card in self._cards.items():
             info = PET_CATALOG[pet_id]
+            custom_name = self.mgr.get_pet_name(pet_id)
+            card.name_label.setText(custom_name)  # Update the card's name label
             card.set_state(
                 equipped=(pet_id == active),
                 owned=(pet_id in owned),
@@ -120,27 +124,61 @@ class VirtualPet(QWidget):
     def _on_card_clicked(self, pet_id: str):
         active = self.mgr.get_active_pet()
 
-        if pet_id == active:
-            self._show_toast("Already equipped!", "#8892a4")
-            return
-
         if self.mgr.owns_pet(pet_id):
-            self.mgr.set_active_pet(pet_id)
-            self._emit_change()
-            self._show_toast(f"Switched to {PET_CATALOG[pet_id]['name']}!", "#3b7deb")
-            return
+            if pet_id == active:
+                # Rename the active pet
+                current_name = self.mgr.get_active_pet_name()
+                name, ok = QInputDialog.getText(self, "Rename Your Pet", "Enter a new name for your pet:", text=current_name)
+                if ok and name.strip():
+                    self.mgr.purchase_pet(pet_id, name.strip())  # This will update the name
+                    self._emit_change()
+                    self._show_toast(f"Renamed to {name.strip()}!", "#3b7deb")
+                return
+            else:
+                # For owned pets that are not equipped, ask what to do
+                msg_box = QMessageBox(self)
+                msg_box.setWindowTitle("Pet Options")
+                msg_box.setText(f"What would you like to do with {self.mgr.get_pet_name(pet_id)}?")
+                equip_button = msg_box.addButton("Equip", QMessageBox.ButtonRole.AcceptRole)
+                rename_button = msg_box.addButton("Rename", QMessageBox.ButtonRole.RejectRole)
+                msg_box.setDefaultButton(equip_button)
+                msg_box.exec()
 
+                if msg_box.clickedButton() == equip_button:
+                    # Equip the pet
+                    self.mgr.set_active_pet(pet_id)
+                    self._emit_change()
+                    self._show_toast(f"Switched to {self.mgr.get_active_pet_name()}!", "#3b7deb")
+                elif msg_box.clickedButton() == rename_button:
+                    # Rename the pet
+                    current_name = self.mgr.get_pet_name(pet_id)
+                    name, ok = QInputDialog.getText(self, "Rename Your Pet", f"Enter a new name for {current_name}:", text=current_name)
+                    if ok and name.strip():
+                        self.mgr.purchase_pet(pet_id, name.strip())  # This will update the name
+                        self._emit_change()
+                        self._show_toast(f"Renamed to {name.strip()}!", "#3b7deb")
+                return
+
+        # If the pet is not owned, instruct the user to press Buy.
+        self._show_toast("Use the Buy button to purchase this pet.", "#f5a623")
+
+    def _on_purchase_clicked(self, pet_id: str):
         cost = PET_CATALOG[pet_id]["cost"]
         if self.mgr.get_coins() < cost:
             self._show_toast("Not enough coins!", "#e74c3c")
             return
 
-        self.mgr.purchase_pet(pet_id)
-        self.mgr.set_active_pet(pet_id)
-        self._emit_change()
-        self._show_toast(
-            f"Purchased and equipped {PET_CATALOG[pet_id]['name']}!", "#27ae60",
-        )
+        default_name = PET_CATALOG[pet_id]["name"]
+        name, ok = QInputDialog.getText(self, "Name Your Pet", f"Enter a name for your {default_name}:", text=default_name)
+        if not ok or not name.strip():
+            return
+
+        if self.mgr.purchase_pet(pet_id, name.strip()):
+            self.mgr.set_active_pet(pet_id)
+            self._emit_change()
+            self._show_toast(f"Purchased and equipped {name.strip()}!", "#27ae60")
+        else:
+            self._show_toast("Purchase failed!", "#e74c3c")
 
     def _emit_change(self):
         self._refresh_state()
