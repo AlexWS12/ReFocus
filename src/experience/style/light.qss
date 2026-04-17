@@ -152,3 +152,17 @@ QFrame#petCard[cardState="equipped"] {
     border-color: #3b7deb;
     background-color: #eaf1fd;
 }
+
+/* Modal dialogs (e.g. the "Equip / Rename" prompt on pet cards).
+   Force the prompt label to dark text so it contrasts the light
+   background of the pane in this theme. */
+QMessageBox,
+QInputDialog {
+    background-color: #ffffff;
+}
+
+QMessageBox QLabel,
+QInputDialog QLabel {
+    color: rgb(34, 34, 34);
+    background-color: transparent;
+}

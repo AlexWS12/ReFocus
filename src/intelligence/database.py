@@ -28,6 +28,7 @@ class Database:
         self._create_inventory_table()
         self._migrate_sessions_table()
         self._migrate_current_pet_default()
+        self._migrate_equipped_accessories()
         self.conn.commit()
 
 
@@ -288,6 +289,24 @@ class Database:
             cursor.execute('''
                 ALTER TABLE sessions ADD COLUMN enabled_distractions TEXT
             ''')
+        except Exception:
+            pass  # Column already exists from a previous migration run
+
+    def _migrate_equipped_accessories(self):
+        # Schema migration: add the `equipped_accessories` column to user_stats.
+        #
+        # Stored as a JSON array of accessory ids that match keys in
+        # ACCESSORY_CATALOG, e.g. '["top_hat"]'.  Only one accessory per slot
+        # is allowed; PetManager enforces that invariant on writes.
+        #
+        # NULL / empty string is interpreted as "no accessories equipped"
+        # which keeps legacy databases (created before this migration) working
+        # without any extra handling.
+        cursor = self._get_connection().cursor()
+        try:
+            cursor.execute(
+                "ALTER TABLE user_stats ADD COLUMN equipped_accessories TEXT DEFAULT '[]'"
+            )
         except Exception:
             pass  # Column already exists from a previous migration run
 

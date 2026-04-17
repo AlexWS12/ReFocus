@@ -4,6 +4,7 @@ from PySide6.QtCore import Qt, QEvent, QTimer
 
 from src.experience.widgets.centered_label import CenteredLabel
 from src.experience.pet_catalog import PET_CATALOG, DEFAULT_PET
+from src.experience.sprite_composer import compose_pet_pixmap
 
 _BUBBLE_MESSAGES = {
     "PHONE_DISTRACTION": "Put your phone away!",
@@ -115,9 +116,13 @@ class petWindow(QMainWindow):
 
         mgr = PetManager()
         pet_id = mgr.get_active_pet()
-        pet_info = PET_CATALOG.get(pet_id, PET_CATALOG[DEFAULT_PET])
+        accessories = mgr.get_equipped_accessories()
 
-        pixmap = QPixmap(pet_info["sprite"])
+        pixmap = compose_pet_pixmap(pet_id, accessories)
+        if pixmap.isNull():
+            pet_info = PET_CATALOG.get(pet_id, PET_CATALOG[DEFAULT_PET])
+            pixmap = QPixmap(pet_info["sprite"])
+
         scaled = pixmap.scaled(80, 80, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.label.setPixmap(scaled)
 
