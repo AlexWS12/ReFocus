@@ -102,7 +102,9 @@ class Session(QWidget):
         report_data = app.session_manager.session_report()
         app.session_manager.reset()
 
-        self.session_report.load(report_data)
+        from src.intelligence.session_feedback import generate_brief_feedback
+        feedback = generate_brief_feedback(report_data, app.database_reader.get_cached_analysis())
+        self.session_report.load(report_data, feedback=feedback)
         self._stack.setCurrentIndex(_REPORT_VIEW)
         app.main_window.show()
         app.main_window.raise_()

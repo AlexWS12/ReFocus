@@ -89,8 +89,7 @@ class ReportPetWidget(QFrame):
         self.title.setText(self._title_text())
 
         insights = (
-            (report_data or {})
-            .get("pattern_analysis", {})
+            ((report_data or {}).get("pattern_analysis") or {})
             .get("insights", [])
         )
         self.message.setText(self._pick_message(insights, report_data or {}))
@@ -104,6 +103,9 @@ class ReportPetWidget(QFrame):
         self.adjustSize()
         self.layout_changed.emit()
         self._fade_timer.start(10000)
+
+    def mouseDoubleClickEvent(self, event):
+        self.hide()
 
     def _fade_out_card(self):
         self._fade_anim.stop()

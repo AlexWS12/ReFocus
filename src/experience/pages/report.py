@@ -14,6 +14,9 @@ from src.experience.widgets.time_of_day_chart import TimeOfDayChart
 from src.experience.widgets.session_length_chart import SessionLengthChart
 from src.experience.widgets.peak_hours_chart import PeakHoursChart
 from src.experience.widgets.report_pet_widget import ReportPetWidget
+from src.experience.widgets.forecast_chart import ForecastChart
+from src.experience.widgets.feature_importance_widget import FeatureImportanceWidget
+from src.experience.widgets.ai_insight_widget import AiInsightWidget
 
 
 class Report(QWidget):
@@ -66,6 +69,18 @@ class Report(QWidget):
         charts_grid.addWidget(self.peak_hours_chart, 1, 1)
         self._layout.addWidget(charts_section)
 
+        ml_section = QWidget()
+        ml_section.setObjectName("reportChartsContainer")
+        ml_grid = QGridLayout(ml_section)
+        self.forecast_chart = ForecastChart(self)
+        self.feature_importance = FeatureImportanceWidget(self)
+        ml_grid.addWidget(self.forecast_chart, 0, 0)
+        ml_grid.addWidget(self.feature_importance, 0, 1)
+        self._layout.addWidget(ml_section)
+
+        self.ai_insight = AiInsightWidget(self)
+        self._layout.addWidget(self.ai_insight)
+
         # Floating pet-insight panel pinned to the report page corner.
         self.pet_widget = ReportPetWidget(self)
         self.pet_widget.layout_changed.connect(self._position_pet_widget)
@@ -75,8 +90,22 @@ class Report(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        self.pet_widget.show()
+        # refresh fast data immediately from cache (no ML blocking)
         self.data = self.app.database_reader.load_report_data()
-        self.data['total_exp'] = self.app.database_reader.get_topbar_data().get('exp', 0)
+        self.data['total_exp'] = (self.app.database_reader.get_topbar_data() or {}).get('exp', 0)
+        self._refresh_all_widgets()
+        # kick off a fresh background analysis; _on_analysis_ready updates charts when done
+        self.app.database_reader.run_analysis_async(callback=self._on_analysis_ready)
+
+    def _on_analysis_ready(self, result):
+        try:
+            self.data['pattern_analysis'] = result
+            self._refresh_all_widgets()
+        except RuntimeError:
+            pass  # widget was deleted before analysis finished
+
+    def _refresh_all_widgets(self):
         self.lifetime_focus.refresh(self.data)
         self.total_sessions.refresh(self.data)
         self.longest_focus.refresh(self.data)
@@ -86,6 +115,9 @@ class Report(QWidget):
         self.time_of_day_chart.refresh(self.data)
         self.session_length_chart.refresh(self.data)
         self.peak_hours_chart.refresh(self.data)
+        self.forecast_chart.refresh(self.data)
+        self.feature_importance.refresh(self.data)
+        self.ai_insight.refresh(self.data)
         self.pet_widget.refresh(self.data)
         self._position_pet_widget()
 

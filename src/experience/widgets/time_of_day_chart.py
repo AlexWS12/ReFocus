@@ -51,7 +51,8 @@ class TimeOfDayChart(QFrame):
 
         if pa is None:
             self._info_label.setStyleSheet("font-size: 15px;")
-            self._info_label.setText("Need 10+ sessions for analysis")
+            total = (data.get("session_analytics") or {}).get("total_sessions", 0) or 0
+            self._info_label.setText("Analysing..." if total >= 10 else f"Need {10 - total} more sessions for analysis")
             return
         self._info_label.setStyleSheet("")
 

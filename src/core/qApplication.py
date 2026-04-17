@@ -32,6 +32,10 @@ class QApplication(QApplication):
         self.vision_manager = VisionManager(self)
         self.session_manager = SessionManager()
 
+        # kick off ML analysis in background immediately so it's ready
+        # by the time the user opens the Report page
+        self.database_reader.run_analysis_async()
+
         self.main_window = MainWindow()
         self.main_window.show()
 

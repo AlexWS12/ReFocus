@@ -278,6 +278,24 @@ class PatternAnalyzer:
 
         return {"hourly_avg": hourly_avg, "peak_hour": peak_hour}
 
+    def best_day_of_week(self, sessions: list) -> dict:
+        _DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        scores_by_day: dict[int, list] = {d: [] for d in range(7)}
+
+        for s in sessions:
+            try:
+                dt = datetime.fromisoformat(s["start_time"])
+            except (ValueError, TypeError):
+                continue
+            scores_by_day[dt.weekday()].append(s["score"])
+
+        # require at least 2 sessions on a given day before reporting it
+        day_avgs = {d: _avg(v) for d, v in scores_by_day.items() if len(v) >= 2}
+        best_day  = max(day_avgs, key=day_avgs.get) if day_avgs else None
+        worst_day = min(day_avgs, key=day_avgs.get) if day_avgs else None
+
+        return {"day_avgs": day_avgs, "best_day": best_day, "worst_day": worst_day, "day_labels": _DAYS}
+
     # ------------------------------------------------------------------
     # Machine learning analyses (scikit-learn)
     # ------------------------------------------------------------------
@@ -435,6 +453,9 @@ class PatternAnalyzer:
     def generate_insights(self, analysis: dict) -> list:
         insights = []
 
+        # --- rule-based insights ---
+
+        # time of day
         tod = analysis.get("time_of_day", {})
         best_period = tod.get("best_period")
         if best_period:
@@ -447,6 +468,7 @@ class PatternAnalyzer:
                     f"(avg score {avg:.0f} across {count} sessions)."
                 )
 
+        # session length
         length = analysis.get("session_length", {})
         best_len = length.get("best_length")
         if best_len:
@@ -465,6 +487,7 @@ class PatternAnalyzer:
                     f"(avg score {avg:.0f})."
                 )
 
+        # most frequent distraction
         dist = analysis.get("distractions", {})
         most_freq = dist.get("most_frequent")
         if most_freq:
@@ -476,14 +499,16 @@ class PatternAnalyzer:
                     f"({top['total_events']} events, {top['pct_of_all_events']:.0f}% of total)."
                 )
 
+        # most impactful distraction (skip if same as most frequent)
         most_imp = dist.get("most_impactful")
         if most_imp and most_imp != most_freq:
             insights.append(f"{most_imp} costs you the most time overall.")
 
-        trend_data  = analysis.get("trend", {})
-        trend       = trend_data.get("trend")
-        delta       = trend_data.get("delta", 0)
-        recent_avg  = trend_data.get("recent_avg")
+        # trend
+        trend_data = analysis.get("trend", {})
+        trend      = trend_data.get("trend")
+        delta      = trend_data.get("delta", 0)
+        recent_avg = trend_data.get("recent_avg")
         if trend == "improving" and recent_avg is not None:
             insights.append(
                 f"Your scores are trending up "
@@ -496,6 +521,7 @@ class PatternAnalyzer:
                 "Try a shorter session or a different time of day."
             )
 
+        # peak hour
         peak = analysis.get("peak_focus", {})
         peak_hour = peak.get("peak_hour")
         if peak_hour is not None:
@@ -505,6 +531,106 @@ class PatternAnalyzer:
                 insights.append(
                     f"Your sharpest hour is around {hour_str} "
                     f"(avg score {peak_score:.0f})."
+                )
+
+        # --- ML-derived insights ---
+
+        # feature importance: which factor drives score most
+        fi = analysis.get("ml_feature_importance", {})
+        fi_features = fi.get("features", [])
+        if fi_features and not fi.get("error"):
+            top_feat = fi_features[0]
+            top_pct  = top_feat["importance_pct"]
+            top_lbl  = top_feat["label"]
+            if top_feat["feature"] in ("hour", "day_of_week"):
+                insights.append(
+                    f"When you study matters more than distractions — "
+                    f"{top_lbl} accounts for {top_pct:.0f}% of your score."
+                )
+            elif top_feat["feature"] == "duration":
+                insights.append(
+                    f"Session length is your biggest performance driver ({top_pct:.0f}% impact). "
+                    "Experiment with different durations."
+                )
+            else:
+                insights.append(
+                    f"{top_lbl} is your #1 score factor ({top_pct:.0f}% impact). "
+                    "Reducing it should give you the biggest gains."
+                )
+
+        # forecast: projected trajectory
+        forecast = analysis.get("ml_forecast", {})
+        if forecast and not forecast.get("error"):
+            direction = forecast.get("direction")
+            slope     = abs(forecast.get("slope", 0))
+            preds     = forecast.get("predicted_next_5", [])
+            if direction == "improving" and preds:
+                insights.append(
+                    f"You're on a roll — improving at +{slope:.1f} pts/session. "
+                    f"Projected score in 5 sessions: {preds[-1]:.0f}."
+                )
+            elif direction == "declining" and preds:
+                insights.append(
+                    f"Your scores are sliding ~{slope:.1f} pts/session. "
+                    f"If this continues, you'll be at {preds[-1]:.0f} in 5 sessions."
+                )
+
+        # clustering: describe the best session profile
+        cl_data  = analysis.get("ml_clusters", {})
+        clusters = cl_data.get("clusters", [])
+        if clusters and not cl_data.get("error") and clusters[0]["session_count"] >= 2:
+            best    = clusters[0]  # sorted descending by avg_score
+            period  = _classify_time_of_day(best["avg_hour"])
+            dur_min = best["avg_duration_min"]
+            if dur_min < 30:
+                dur_label = "short (< 30 min)"
+            elif dur_min < 60:
+                dur_label = "medium (30–60 min)"
+            elif dur_min < 90:
+                dur_label = "long (60–90 min)"
+            else:
+                dur_label = "marathon (90+ min)"
+            insights.append(
+                f"Your best sessions ({best['label']}, avg {best['avg_score']:.0f}) "
+                f"are typically {period}, {dur_label}, "
+                f"with {best['avg_distractions']:.1f} avg distractions."
+            )
+
+        # day of week: strongest vs weakest day
+        dow        = analysis.get("day_of_week", {})
+        day_avgs   = dow.get("day_avgs", {})
+        day_labels = dow.get("day_labels", [])
+        best_day   = dow.get("best_day")
+        worst_day  = dow.get("worst_day")
+        if best_day is not None and len(day_avgs) >= 2 and best_day != worst_day:
+            best_score  = day_avgs[best_day]
+            worst_score = day_avgs[worst_day]
+            if (best_score - worst_score) >= 5:
+                insights.append(
+                    f"{day_labels[best_day]} is your strongest study day (avg {best_score:.0f}). "
+                    f"{day_labels[worst_day]} tends to be rougher (avg {worst_score:.0f}) — "
+                    "consider lighter sessions then."
+                )
+            else:
+                insights.append(
+                    f"You perform best on {day_labels[best_day]} (avg {best_score:.0f})."
+                )
+
+        # consistency: score standard deviation
+        scores = trend_data.get("scores", [])
+        if len(scores) >= 5:
+            mean     = sum(scores) / len(scores)
+            variance = sum((s - mean) ** 2 for s in scores) / len(scores)
+            std      = round(variance ** 0.5, 1)
+            if std >= 15:
+                insights.append(
+                    f"Your scores are quite variable (±{std:.0f} pts). "
+                    "More consistent sessions could raise your floor."
+                )
+            elif std <= 7:
+                insights.append(
+                    f"Your scores are very consistent (±{std:.0f} pts). "
+                    "You know what works — now push the ceiling."
                 )
 
         return insights
@@ -526,6 +652,7 @@ class PatternAnalyzer:
             "distractions":          self.top_distractions(sessions),
             "trend":                 self.focus_trend(sessions),
             "peak_focus":            self.peak_focus_hours(sessions),
+            "day_of_week":           self.best_day_of_week(sessions),
             "ml_feature_importance": self.ml_feature_importance(sessions),
             "ml_clusters":           self.ml_cluster_sessions(sessions),
             "ml_forecast":           self.ml_forecast_trend(sessions),

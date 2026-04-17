@@ -101,8 +101,7 @@ class SessionReport(QWidget):
         self._root = QVBoxLayout(self)
         self._root.setAlignment(Qt.AlignTop)
 
-    def load(self, report: dict):
-        """Populate the report from a session_report() dict. Clears previous content."""
+    def load(self, report: dict, feedback: str = ""):
         self._clear()
 
         score = report.get("score", 0) or 0
@@ -142,6 +141,20 @@ class SessionReport(QWidget):
         breakdown = self._build_breakdown(report, distracted)
         if breakdown is not None:
             self._root.addWidget(breakdown)
+
+        # --- Brief feedback ---
+        if feedback:
+            self._root.addSpacing(8)
+            fb_card = QFrame()
+            fb_card.setObjectName("statCard")
+            fb_card.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            fb_layout = QVBoxLayout(fb_card)
+            fb_label = QLabel(feedback)
+            fb_label.setWordWrap(True)
+            fb_label.setAlignment(Qt.AlignLeft)
+            fb_label.setStyleSheet("font-size: 13px; padding: 4px;")
+            fb_layout.addWidget(fb_label)
+            self._root.addWidget(fb_card)
 
     def _build_breakdown(self, report: dict, total_distracted: int) -> QFrame | None:
         rows = [

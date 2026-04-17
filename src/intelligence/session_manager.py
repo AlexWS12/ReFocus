@@ -2,14 +2,13 @@ import json
 import time
 import math
 from enum import Enum
+
+# database import is safe (no circular deps) — PatternAnalyzer is lazy-imported
+# in _background_reports to avoid loading scikit-learn at startup
 try:
     from src.intelligence.database import get_database
-    from src.core import settings_manager
-    from src.intelligence.pattern_analysis import PatternAnalyzer
 except ImportError:
     from database import get_database
-    from pattern_analysis import PatternAnalyzer
-    settings_manager = None
 
 class SessionState(Enum):
     READY = "ready"
@@ -29,11 +28,10 @@ class DistractionType(Enum):
     IDLE_DISTRACTION = "idle_distraction"
 
 
+# settings_manager imports DistractionType from this module — must come AFTER DistractionType is defined
 try:
-    from src.intelligence.database import get_database
     from src.core import settings_manager
 except ImportError:
-    from database import get_database
     settings_manager = None
 
 # Severity weights for each distraction type used in score calculation.
@@ -259,8 +257,7 @@ class SessionManager:
         # ensures that if _enabled_types was never set (shouldn't happen), we fall
         # back to allowing everything rather than blocking everything.
         if self._enabled_types is not None and dtype not in self._enabled_types:
-            if dtype not in self.enabled_distractions:
-                return
+            return
         self.distraction_events.append({
             "type": dtype,
             "time": duration_seconds, 
@@ -381,11 +378,36 @@ class SessionManager:
         # last_analyzed_count is the count from before this session.
         last_analyzed_count = (row["total_sessions"] - 1) if row else 0
 
-        analyzer = PatternAnalyzer()
-        analyzer.generate_session_report(self.current_session_id)
-        analyzer.generate_insights_report(last_analyzed_count=last_analyzed_count)
+        # Run report generation and cache refresh off the UI thread so the
+        # session report screen appears instantly.
+        import threading
+        threading.Thread(
+            target=self._background_reports,
+            args=(self.current_session_id, last_analyzed_count),
+            daemon=True,
+        ).start()
         # Session data is intentionally kept in memory (current_session_id, distraction_events)
         # until reset() is explicitly called, so session_report() can still be accessed after end.
+
+    def _background_reports(self, session_id: int, last_analyzed_count: int):
+        try:
+            try:
+                from src.intelligence.pattern_analysis import PatternAnalyzer
+            except ImportError:
+                from pattern_analysis import PatternAnalyzer
+            analyzer = PatternAnalyzer()
+            analyzer.generate_session_report(session_id)
+            analyzer.generate_insights_report(last_analyzed_count=last_analyzed_count)
+        except Exception:
+            pass
+        # refresh the DatabaseReader cache so the Report page has fresh data
+        try:
+            from src.core.qApplication import QApplication as _App
+            app = _App.instance()
+            if app is not None:
+                app.database_reader.run_analysis_async()
+        except Exception:
+            pass
 
     def _calculate_rewards(self, score, duration):
         # Calculates XP (points_earned) and coins for a completed session.
