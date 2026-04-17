@@ -176,3 +176,51 @@ QFrame#petCard[cardState="equipped"] {
     border-color: #4f8ef7;
     background-color: #1c3360;
 }
+
+QDialog#confirmDialog {
+    background-color: #1a2744;
+    border: 1px solid #1e3a5f;
+    border-radius: 12px;
+}
+
+QDialog#confirmDialog QLabel#confirmDialogTitle {
+    color: #e8eaf0;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+QDialog#confirmDialog QLabel#confirmDialogBody {
+    color: #e8eaf0;
+    font-size: 13px;
+}
+
+QDialog#confirmDialog QLabel#confirmDialogMeta {
+    color: #8892a4;
+    font-size: 12px;
+}
+
+QPushButton#confirmPrimaryButton {
+    background-color: #4f8ef7;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 14px;
+    min-width: 88px;
+}
+
+QPushButton#confirmPrimaryButton:hover {
+    background-color: #3a6fd6;
+}
+
+QPushButton#confirmSecondaryButton {
+    background-color: #1a2744;
+    color: #e8eaf0;
+    border: 1px solid #1e3a5f;
+    border-radius: 8px;
+    padding: 8px 14px;
+    min-width: 88px;
+}
+
+QPushButton#confirmSecondaryButton:hover {
+    background-color: #233150;
+}
