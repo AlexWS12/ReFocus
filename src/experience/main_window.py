@@ -21,7 +21,7 @@ class MainWindow(QMainWindow):
         # set up the main window
         self.setWindowTitle("ReFocus")
         self.setMinimumWidth(860)
-        self.setMinimumHeight(700)
+        self.setMinimumHeight(900)
 
         # main container for the main window
         self.main_container = QWidget()

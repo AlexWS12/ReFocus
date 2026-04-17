@@ -224,3 +224,17 @@ QPushButton#confirmSecondaryButton {
 QPushButton#confirmSecondaryButton:hover {
     background-color: #233150;
 }
+
+/* Modal dialogs (e.g. the "Equip / Rename" prompt on pet cards).
+   Force the prompt label to white text so it contrasts the dark
+   background of the pane in this theme. */
+QMessageBox,
+QInputDialog {
+    background-color: #1a2744;
+}
+
+QMessageBox QLabel,
+QInputDialog QLabel {
+    color: #ffffff;
+    background-color: transparent;
+}

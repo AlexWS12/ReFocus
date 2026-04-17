@@ -24,9 +24,11 @@ class Database:
         self._create_events_table()
         self._create_achievements_table()
         self._create_user_settings_table() # New table for user settings to control distraction type toggles
+        self._migrate_inventory_table()
         self._create_inventory_table()
         self._migrate_sessions_table()
         self._migrate_current_pet_default()
+        self._migrate_equipped_accessories()
         self.conn.commit()
 
 
@@ -115,7 +117,7 @@ class Database:
                 exp INTEGER DEFAULT 0,
                 total_distractions INTEGER DEFAULT 0,
                 total_look_aways INTEGER DEFAULT 0,
-                current_pet TEXT DEFAULT 'default',
+                current_pet TEXT DEFAULT 'cat',
                 created_at TEXT,
                 updated_at TEXT
             )
@@ -221,19 +223,41 @@ class Database:
         # Tracks which pets (and later accessories) the user owns.
         # item_type  - 'pet' or 'accessory'
         # item_id    - key from PET_CATALOG / ACCESSORY_CATALOG
+        # name       - custom name for the pet
         # acquired_at - ISO 8601 timestamp of purchase
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS inventory (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 item_type TEXT NOT NULL,
                 item_id TEXT NOT NULL,
+                name TEXT,
                 acquired_at TEXT,
                 UNIQUE(item_type, item_id)
             )
         ''')
         cursor.execute(
-            "INSERT OR IGNORE INTO inventory (item_type, item_id) VALUES ('pet', 'cat')"
+            "INSERT OR IGNORE INTO inventory (item_type, item_id, name) VALUES ('pet', 'cat', 'Calico Cat')"
         )
+        # Set default names for existing pets without names
+        cursor.execute("""
+            UPDATE inventory SET name = CASE item_id
+                WHEN 'cat' THEN 'Calico Cat'
+                WHEN 'dog' THEN 'Pup'
+                WHEN 'frog' THEN 'Frog'
+                ELSE item_id
+            END WHERE name IS NULL AND item_type = 'pet'
+        """)
+
+    def _migrate_inventory_table(self):
+        # Migration: add the name column to the existing inventory table.
+        # This allows existing databases to support pet naming without losing data.
+        cursor = self._get_connection().cursor()
+        try:
+            cursor.execute('''
+                ALTER TABLE inventory ADD COLUMN name TEXT
+            ''')
+        except Exception:
+            pass  # Column already exists from a previous migration run
 
     def _migrate_current_pet_default(self):
         cursor = self._get_connection().cursor()
@@ -265,6 +289,24 @@ class Database:
             cursor.execute('''
                 ALTER TABLE sessions ADD COLUMN enabled_distractions TEXT
             ''')
+        except Exception:
+            pass  # Column already exists from a previous migration run
+
+    def _migrate_equipped_accessories(self):
+        # Schema migration: add the `equipped_accessories` column to user_stats.
+        #
+        # Stored as a JSON array of accessory ids that match keys in
+        # ACCESSORY_CATALOG, e.g. '["top_hat"]'.  Only one accessory per slot
+        # is allowed; PetManager enforces that invariant on writes.
+        #
+        # NULL / empty string is interpreted as "no accessories equipped"
+        # which keeps legacy databases (created before this migration) working
+        # without any extra handling.
+        cursor = self._get_connection().cursor()
+        try:
+            cursor.execute(
+                "ALTER TABLE user_stats ADD COLUMN equipped_accessories TEXT DEFAULT '[]'"
+            )
         except Exception:
             pass  # Column already exists from a previous migration run
 

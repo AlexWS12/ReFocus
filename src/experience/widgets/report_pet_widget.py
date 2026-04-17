@@ -1,5 +1,6 @@
 from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, QTimer, Signal
 from PySide6.QtWidgets import (
+    QApplication,
     QFrame,
     QLabel,
     QVBoxLayout,
@@ -8,7 +9,6 @@ from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
 )
 
-from src.experience.pet_catalog import DEFAULT_PET, PET_CATALOG
 from src.experience.widgets.pet_view import PetView
 from src.intelligence.pet_manager import PetManager
 
@@ -84,6 +84,13 @@ class ReportPetWidget(QFrame):
         self._fade_anim.setEndValue(0.0)
         self._fade_anim.finished.connect(self._on_fade_finished)
 
+        app = QApplication.instance()
+        if hasattr(app, "signals"):
+            app.signals.pet_appearance_changed.connect(self._refresh_title)
+
+    def _refresh_title(self):
+        self.title.setText(self._title_text())
+
     def refresh(self, report_data: dict):
         self.pet_view.refresh()
         self.title.setText(self._title_text())
@@ -119,8 +126,7 @@ class ReportPetWidget(QFrame):
         self.layout_changed.emit()
 
     def _title_text(self) -> str:
-        pet_id = PetManager().get_active_pet()
-        pet_name = PET_CATALOG.get(pet_id, PET_CATALOG[DEFAULT_PET]).get("name", "Your Pet")
+        pet_name = PetManager().get_active_pet_name() or "Your Pet"
         return f"{pet_name}'s Insight"
 
     def _pick_message(self, insights: list[str], report_data: dict) -> str:
