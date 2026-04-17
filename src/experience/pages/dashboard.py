@@ -2,7 +2,7 @@ import random
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QGridLayout, QGraphicsOpacityEffect
 from PySide6.QtCore import QEvent, QTimer, Qt, QPropertyAnimation, QEasingCurve, QPoint
-from PySide6.QtGui import QPainter, QPainterPath, QColor
+from PySide6.QtGui import QPainter, QPainterPath, QColor, QImage
 from src.core.qApplication import QApplication
 from src.experience.button import Button
 from src.experience.widgets.centered_label import CenteredLabel
@@ -224,9 +224,79 @@ class Dashboard(QWidget):
         name = random.choice(_MOCK_PET_NAMES) if _MOCK_PET_NAMES else "Pet Name"
         self.pet_name_bubble.set_message(name)
 
-        # Float the bubble above the pet card without affecting dashboard layout.
-        pet_top_left = self.PetView.mapTo(self, self.PetView.rect().topLeft())
-        bubble_x = pet_top_left.x() + (self.PetView.width() - self.pet_name_bubble.width()) // 2
-        bubble_y = max(4, pet_top_left.y() - self.pet_name_bubble.height() - 6)
+        bubble_x, bubble_y = self._bubble_position_for_pet()
         self.pet_name_bubble.show_at(bubble_x, bubble_y, _EASTER_EGG_BUBBLE_MS)
+
+    def _bubble_position_for_pet(self) -> tuple[int, int]:
+        label = self.PetView.label
+        label_top_left = label.mapTo(self, QPoint(0, 0))
+
+        head_anchor_x = None
+        top_opaque_y = None
+
+        sprite_w = label.width()
+        sprite_h = label.height()
+        sprite_x = label_top_left.x()
+        sprite_y = label_top_left.y()
+
+        pix = label.pixmap()
+        if pix is not None and not pix.isNull():
+            sprite_w = pix.width()
+            sprite_h = pix.height()
+            # Pet pixmap is bottom-centered in the label.
+            sprite_x = label_top_left.x() + (label.width() - sprite_w) // 2
+            sprite_y = label_top_left.y() + (label.height() - sprite_h)
+
+            image = pix.toImage().convertToFormat(QImage.Format.Format_ARGB32)
+
+            min_x = image.width()
+            max_x = -1
+            min_y = image.height()
+            max_y = -1
+            for y in range(image.height()):
+                for x in range(image.width()):
+                    if image.pixelColor(x, y).alpha() > 0:
+                        if x < min_x:
+                            min_x = x
+                        if x > max_x:
+                            max_x = x
+                        if y < min_y:
+                            min_y = y
+                        if y > max_y:
+                            max_y = y
+
+            if max_x >= min_x and max_y >= min_y:
+                # Use only upper body rows so anchor tracks the head, not belly/tail.
+                head_bottom = min_y + max(1, int((max_y - min_y + 1) * 0.38))
+                head_min_x = image.width()
+                head_max_x = -1
+                for y in range(min_y, min(head_bottom + 1, image.height())):
+                    for x in range(image.width()):
+                        if image.pixelColor(x, y).alpha() > 0:
+                            if x < head_min_x:
+                                head_min_x = x
+                            if x > head_max_x:
+                                head_max_x = x
+
+                if head_max_x >= head_min_x:
+                    head_anchor_x = sprite_x + (head_min_x + head_max_x) // 2
+                top_opaque_y = sprite_y + min_y
+
+        if head_anchor_x is not None:
+            anchor_x = head_anchor_x
+        else:
+            anchor_x = sprite_x + sprite_w // 2
+
+        bubble_x = anchor_x - self.pet_name_bubble.width() // 2
+
+        if top_opaque_y is not None:
+            bubble_y = top_opaque_y - self.pet_name_bubble.height() - 6
+        else:
+            bubble_y = sprite_y - self.pet_name_bubble.height() - 8
+
+        # Keep the bubble fully inside the dashboard page.
+        max_x = max(0, self.width() - self.pet_name_bubble.width())
+        bubble_x = max(0, min(bubble_x, max_x))
+        bubble_y = max(4, bubble_y)
+        return bubble_x, bubble_y
     
