@@ -8,12 +8,7 @@ from src.intelligence.session_manager import DistractionType
 
 
 class DistractionToggles(QFrame):
-    """Checkboxes for which distraction types the user wants tracked.
-
-    Loads initial state from settings.json. Current selections can be
-    read via ``get_enabled_types()`` and are persisted when the parent
-    Settings page triggers a save.
-    """
+    # Checkboxes for which distraction types the user wants tracked
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -37,10 +32,10 @@ class DistractionToggles(QFrame):
             outer.addWidget(cb)
 
     def get_enabled_types(self) -> set[DistractionType]:
-        """Return the set of distraction types currently checked."""
+        # Return the set of distraction types currently checked
         return {dtype for dtype, cb in self.checks.items() if cb.isChecked()}
 
     def set_enabled_types(self, enabled: set[DistractionType]) -> None:
-        """Update checkboxes to match the given set."""
+        # Update checkboxes to match the given set
         for dtype, cb in self.checks.items():
             cb.setChecked(dtype in enabled)

@@ -6,14 +6,7 @@ from src.vision.Trackers.gaze_calibration import GazeCalibrator
 
 
 class VisionManager(QObject):
-    """Owns camera lifecycle and emits annotated frames to UI consumers.
-
-    Two operating modes:
-    - **Preview**: camera runs without distraction logging (Setup page).
-    - **Session**: camera runs with a SessionManager so distractions are
-      recorded in the database.  Preview stop calls are ignored while a
-      session is active.
-    """
+    # Owns camera lifecycle and emits annotated frames to UI consumers
 
     frame_ready = Signal(object)
     stream_state_changed = Signal(bool)
@@ -36,12 +29,7 @@ class VisionManager(QObject):
         return self._camera is not None and self._timer.isActive()
 
     def set_camera_index(self, index: int) -> None:
-        """Change the active camera device.
-
-        If the camera is currently running in preview mode, it is restarted
-        with the new device automatically.  During an active session the
-        index is stored and will take effect on the next start.
-        """
+        # Change the active camera device
         if index == self._camera_index:
             return
         self._camera_index = index
@@ -54,7 +42,7 @@ class VisionManager(QObject):
     # ------------------------------------------------------------------
 
     def start(self) -> None:
-        """Start the camera for preview. No-op if a session is active."""
+        # Start the camera for preview
         if self._session_active:
             return
         if self._camera is None:
@@ -64,7 +52,7 @@ class VisionManager(QObject):
             self.stream_state_changed.emit(True)
 
     def stop(self) -> None:
-        """Stop the preview camera. No-op if a session is active."""
+        # Stop the preview camera
         if self._session_active:
             return
         self._force_stop()
@@ -74,7 +62,7 @@ class VisionManager(QObject):
     # ------------------------------------------------------------------
 
     def start_session(self, session_manager) -> None:
-        """Start the camera with distraction logging for an active study session."""
+        # Start the camera with distraction logging for an active study session
         self._force_stop()
         self._session_active = True
         self._camera = Camera(session_manager=session_manager, camera_index=self._camera_index)
@@ -83,11 +71,11 @@ class VisionManager(QObject):
         self.stream_state_changed.emit(True)
 
     def _on_camera_distraction(self, distraction_type: str) -> None:
-        """Bridge callback from Camera thread to Qt signal."""
+        # Bridge callback from Camera thread to Qt signal
         self.distraction_started.emit(distraction_type)
 
     def stop_session(self) -> None:
-        """Stop the camera when a session ends (flushes open distractions)."""
+        # Stop the camera when a session ends (flushes open distractions)
         self._session_active = False
         self._force_stop()
 

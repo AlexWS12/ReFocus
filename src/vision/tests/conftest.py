@@ -1,6 +1,4 @@
-"""
-Pytest configuration and fixtures for vision tests.
-"""
+# Pytest configuration and fixtures for vision tests
 import importlib
 import os
 import sys
@@ -8,7 +6,7 @@ import pytest
 
 
 def _import(primary: str, fallback: str, symbol: str):
-    """Try project-root import first, then pytest-pythonpath fallback."""
+    # Try project-root import first, then pytest-pythonpath fallback
     for mod in (primary, fallback):
         try:
             return getattr(importlib.import_module(mod), symbol)
@@ -42,7 +40,7 @@ SessionManager = _import("src.intelligence.session_manager", "session_manager", 
 
 
 class _FakeEyeTracker:
-    """Minimal eye tracker stub used by camera._update_distraction_tracking()."""
+    # Minimal eye tracker stub used by camera._update_distraction_tracking()
 
     def __init__(self):
         self._cached_data = {
@@ -53,15 +51,7 @@ class _FakeEyeTracker:
 
 @pytest.fixture
 def mock_camera(vision_session_manager):
-    """Fixture that provides a mock Camera without hardware initialization.
-    
-    Creates a Camera using __new__() to bypass YOLO/camera setup, then injects
-    only the fields needed for distraction tracking simulation. Uses the
-    vision_session_manager fixture for logging.
-    
-    Yields:
-        Camera: A mock camera instance ready for distraction simulation.
-    """
+    # Fixture that provides a mock Camera without hardware initialization
     session_manager = vision_session_manager
 
     # Create Camera instance without calling __init__ (no hardware)
@@ -84,14 +74,7 @@ def mock_camera(vision_session_manager):
 
 @pytest.fixture
 def vision_session_manager():
-    """Fixture that provides a SessionManager for vision tests.
-    
-    Creates a sessionManager with a temporary test database, yields it,
-    then cleans up the database file after the test.
-    
-    Yields:
-        SessionManager: A session manager for use in vision tests.
-    """
+    # Fixture that provides a SessionManager for vision tests
     Database = _import("src.intelligence.database", "database", "Database")
 
     # Use a temporary test DB so vision tests don't pollute data.db

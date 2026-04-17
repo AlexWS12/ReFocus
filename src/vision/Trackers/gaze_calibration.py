@@ -7,7 +7,7 @@ from .attention_tracker import gazeTracker  # relative import: both files are in
 
 
 class GazeCalibrator:
-    """Calibrates neutral center and screen-corner gaze envelope."""
+    # Calibrates neutral center and screen-corner gaze envelope
 
     def __init__(self, samples_per_target: int = 20, camera_index: int = 0):
         self.samples_per_target = samples_per_target
@@ -40,7 +40,7 @@ class GazeCalibrator:
         cv.line(frame, (tx, ty - 16), (tx, ty + 16), (0, 255, 255), 2)
 
     def run(self) -> dict:
-        """Guide the user through center + corner targets and persist a calibration profile."""
+        # Guide the user through center + corner targets and persist a calibration profile
         cap = cv.VideoCapture(self.camera_index)
         if not cap.isOpened():
             return {"success": False, "message": "Cannot open camera"}
@@ -223,12 +223,7 @@ class GazeCalibrator:
         pitch_max: float,
         roll_threshold: float,
     ) -> None:
-        """Persist calibrated gaze thresholds to settings.json for UI display and user tweaking.
-
-        Yaw and pitch bounds are asymmetric (min/max), so we store the larger
-        absolute extent as the single representative threshold — this is the value
-        the user will see and can nudge in the settings panel.
-        """
+        # Persist calibrated gaze thresholds to settings.json for UI display and user tweaking
         try:
             for module_path in ("src.core.settings_manager", "core.settings_manager"):
                 try:

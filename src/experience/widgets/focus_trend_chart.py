@@ -19,7 +19,7 @@ _TREND_COLORS = {
 
 
 class FocusTrendChart(QFrame):
-    """Line chart showing raw scores and a rolling-average overlay."""
+    # Line chart showing raw scores and a rolling-average overlay
 
     def __init__(self, parent):
         super().__init__(parent)

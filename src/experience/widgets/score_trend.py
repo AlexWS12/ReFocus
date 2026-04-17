@@ -10,7 +10,7 @@ _ACCENT_FILL = QColor(59, 125, 235, 40)
 
 
 class ScoreTrend(QFrame):
-    """Dashboard card showing a sparkline of recent session scores."""
+    # Dashboard card showing a sparkline of recent session scores
 
     def __init__(self, parent):
         super().__init__(parent)

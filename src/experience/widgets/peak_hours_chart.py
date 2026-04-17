@@ -19,7 +19,7 @@ def _hour_label(h: int) -> str:
 
 
 class PeakHoursChart(QFrame):
-    """Bar chart showing average focus score per hour of day."""
+    # Bar chart showing average focus score per hour of day
 
     def __init__(self, parent):
         super().__init__(parent)

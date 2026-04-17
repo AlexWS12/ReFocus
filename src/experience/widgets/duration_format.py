@@ -1,5 +1,5 @@
 def format_focus_duration(seconds: float | int) -> str:
-    """Format focus duration using seconds, minutes, or hours based on size."""
+    # Format focus duration using seconds, minutes, or hours based on size
     total_seconds = float(seconds or 0)
     if total_seconds < 0:
         total_seconds = 0.0

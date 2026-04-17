@@ -1,15 +1,4 @@
-"""
-Pytest-based functional tests for SessionManager.
-
-Tests session lifecycle, pause/resume, rewards calculation,
-user_stats updates, and guard checks.
-
-Run with:
-    pytest src/intelligence/tests/test_session_manager.py -v
-
-Or directly:
-    python src/intelligence/tests/test_session_manager.py
-"""
+# Pytest-based functional tests for SessionManager
 
 import pytest
 import time
@@ -29,10 +18,10 @@ except ModuleNotFoundError:
 
 
 class TestSessionManagerLifecycle:
-    """Tests for basic session lifecycle operations."""
+    # Tests for basic session lifecycle operations
 
     def test_session_lifecycle(self, session_manager):
-        """Start → log distractions → end → report produces valid data."""
+        # Start → log distractions → end → report produces valid data
         sm, db = session_manager
 
         sm.start_session()
@@ -55,7 +44,7 @@ class TestSessionManagerLifecycle:
         assert report["look_away_distractions"] == 1
 
     def test_pause_resume(self, session_manager):
-        """Pause and resume transitions work correctly."""
+        # Pause and resume transitions work correctly
         sm, db = session_manager
 
         sm.start_session()
@@ -72,7 +61,7 @@ class TestSessionManagerLifecycle:
         sm.end_session()
 
     def test_end_while_paused(self, session_manager):
-        """Ending a session while paused closes the open pause segment."""
+        # Ending a session while paused closes the open pause segment
         sm, db = session_manager
 
         sm.start_session()
@@ -85,7 +74,7 @@ class TestSessionManagerLifecycle:
         assert report["duration"] <= 1
 
     def test_multiple_pause_cycles(self, session_manager):
-        """Multiple pause/resume cycles accumulate correctly."""
+        # Multiple pause/resume cycles accumulate correctly
         sm, db = session_manager
 
         sm.start_session()
@@ -98,7 +87,7 @@ class TestSessionManagerLifecycle:
         sm.end_session()
 
     def test_reset(self, session_manager):
-        """Reset clears all state including pause tracking."""
+        # Reset clears all state including pause tracking
         sm, db = session_manager
 
         sm.start_session()
@@ -122,10 +111,10 @@ class TestSessionManagerLifecycle:
 
 
 class TestRewardsAndStats:
-    """Tests for rewards calculation and user stats updates."""
+    # Tests for rewards calculation and user stats updates
 
     def test_rewards_calculation(self, session_manager):
-        """Rewards scale with score and duration."""
+        # Rewards scale with score and duration
         sm, db = session_manager
 
         # Test the formula directly: score=80, duration=4500s (75 min)
@@ -140,7 +129,7 @@ class TestRewardsAndStats:
         assert coins_min == 1
 
     def test_user_stats_update(self, session_manager):
-        """user_stats row is updated after each session ends."""
+        # user_stats row is updated after each session ends
         sm, db = session_manager
 
         # Check initial state
@@ -161,7 +150,7 @@ class TestRewardsAndStats:
         assert after["level"] >= 1
 
     def test_calculate_level(self):
-        """Level formula: ceil(exp / 110), floor of 1."""
+        # Level formula: ceil(exp / 110), floor of 1
         assert _calculate_level(0) == 1
         assert _calculate_level(-10) == 1
         assert _calculate_level(110) == 1
@@ -171,10 +160,10 @@ class TestRewardsAndStats:
 
 
 class TestScoreCalculation:
-    """Tests for score calculation logic."""
+    # Tests for score calculation logic
 
     def test_score_calculation(self, session_manager):
-        """Score formula: 100 - penalty + duration_bonus, clamped to 0-100."""
+        # Score formula: 100 - penalty + duration_bonus, clamped to 0-100
         sm, db = session_manager
 
         # Perfect session (no distractions, 60 min) → 100 + 7 bonus, clamped to 100
@@ -194,10 +183,10 @@ class TestScoreCalculation:
 
 
 class TestGuardChecks:
-    """Tests for invalid state transitions and guard checks."""
+    # Tests for invalid state transitions and guard checks
 
     def test_invalid_state_transitions(self, session_manager):
-        """Invalid state transitions raise exceptions."""
+        # Invalid state transitions raise exceptions
         sm, db = session_manager
 
         # Can't pause/resume from READY

@@ -1,1 +1,1 @@
-"""Vision tracker modules package."""
+# Vision tracker modules package

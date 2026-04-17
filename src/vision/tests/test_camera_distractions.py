@@ -1,16 +1,4 @@
-"""
-Pytest-based tests for camera distraction tracking.
-
-Tests simulate camera-driven distractions without opening hardware,
-verifying that phone, look-away, and left-desk events are correctly
-logged through SessionManager.
-
-Run with:
-    pytest src/vision/tests/test_camera_distractions.py -v
-
-Or directly:
-    python src/vision/tests/test_camera_distractions.py
-"""
+# Pytest-based tests for camera distraction tracking
 
 import importlib
 import os
@@ -21,7 +9,7 @@ import pytest
 
 
 def _import(primary: str, fallback: str, symbol: str):
-    """Try project-root import first, then pytest-pythonpath / direct-run fallback."""
+    # Try project-root import first, then pytest-pythonpath / direct-run fallback
     for mod in (primary, fallback):
         try:
             return getattr(importlib.import_module(mod), symbol)
@@ -61,15 +49,7 @@ def tick(
     face_facing_screen: bool = True,
     sleep_seconds: float = 0.05,
 ) -> None:
-    """Advance one mock frame and let camera logic update distraction state.
-    
-    Args:
-        camera: Mock Camera instance
-        phone_detected: Whether phone is detected in this frame
-        face_present: Whether a face is present
-        face_facing_screen: Whether face is facing the screen
-        sleep_seconds: Time to sleep (simulating frame processing delay)
-    """
+    # Advance one mock frame and let camera logic update distraction state
     camera.eye_tracker._cached_data["face_present"] = face_present
     camera.eye_tracker._cached_data["face_facing_screen"] = face_facing_screen
     camera._update_distraction_tracking(phone_detected)
@@ -77,10 +57,10 @@ def tick(
 
 
 class TestCameraDistractions:
-    """Tests for camera-based distraction tracking."""
+    # Tests for camera-based distraction tracking
 
     def test_phone_distraction(self, mock_camera, vision_session_manager):
-        """Verify phone distraction is detected and logged."""
+        # Verify phone distraction is detected and logged
         session_manager = vision_session_manager
         session_manager.start_session()
 
@@ -106,7 +86,7 @@ class TestCameraDistractions:
         assert report["score"] >= 0, "Score should be non-negative"
 
     def test_look_away_distraction(self, mock_camera, vision_session_manager):
-        """Verify look-away distraction is detected and logged."""
+        # Verify look-away distraction is detected and logged
         session_manager = vision_session_manager
         session_manager.start_session()
 
@@ -131,7 +111,7 @@ class TestCameraDistractions:
         assert report["look_away_time"] > 0, "Look-away time should be positive"
 
     def test_left_desk_distraction(self, mock_camera, vision_session_manager):
-        """Verify left-desk distraction is detected and logged."""
+        # Verify left-desk distraction is detected and logged
         session_manager = vision_session_manager
         session_manager.start_session()
 
@@ -156,7 +136,7 @@ class TestCameraDistractions:
         assert report["time_away"] > 0, "Time away should be positive"
 
     def test_all_three_distractions(self, mock_camera, vision_session_manager):
-        """Verify that all three distraction types can be logged in one session."""
+        # Verify that all three distraction types can be logged in one session
         session_manager = vision_session_manager
         session_manager.start_session()
 

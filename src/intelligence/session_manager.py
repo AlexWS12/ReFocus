@@ -62,27 +62,13 @@ _DTYPE_TO_SETTING_COL = {
 
 
 class UserConfig:
-    """Reads and writes per-distraction-type toggles from the user_settings table.
-
-    This class is the single source of truth for which distraction types are
-    currently enabled.  SessionManager reads from it at session start to freeze
-    a snapshot; the settings UI writes to it when the user flips a toggle.
-
-    The class is intentionally co-located with SessionManager rather than in a
-    separate file because it is small (~40 lines), tightly coupled to
-    DistractionType and get_database(), and only consumed by SessionManager.
-    """
+    # Reads and writes per-distraction-type toggles from the user_settings table
 
     def __init__(self):
         self.db = get_database()
 
     def get_enabled_types(self) -> set:
-        """Returns the set of DistractionTypes currently enabled in user settings.
-
-        Reads the singleton user_settings row and checks each boolean column.
-        A column value of 1 (truthy) means the type is enabled.
-        Used by SessionManager.start_session() to freeze the config snapshot.
-        """
+        # Returns the set of DistractionTypes currently enabled in user settings
         cursor = self.db.cursor()
         cursor.execute("SELECT * FROM user_settings WHERE id = 1")
         row = cursor.fetchone()
@@ -92,20 +78,14 @@ class UserConfig:
         }
 
     def is_enabled(self, dtype: DistractionType) -> bool:
-        """Check whether a single distraction type is currently enabled."""
+        # Check whether a single distraction type is currently enabled
         col = _DTYPE_TO_SETTING_COL[dtype]
         cursor = self.db.cursor()
         cursor.execute(f"SELECT {col} FROM user_settings WHERE id = 1")
         return bool(cursor.fetchone()[col])
 
     def set_enabled(self, dtype: DistractionType, enabled: bool) -> None:
-        """Toggle a single distraction type on or off.
-
-        Writes to the DB immediately and commits, so the change is persisted
-        even if the app crashes before the next explicit commit.
-        The column name is safe from injection because it comes from the
-        hardcoded _DTYPE_TO_SETTING_COL mapping, never from user input.
-        """
+        # Toggle a single distraction type on or off
         col = _DTYPE_TO_SETTING_COL[dtype]
         now_str = time.strftime('%Y-%m-%dT%H:%M:%S', time.localtime())
         cursor = self.db.cursor()
@@ -116,10 +96,7 @@ class UserConfig:
         self.db.commit()
 
     def get_all_settings(self) -> dict:
-        """Returns {DistractionType: bool} for every distraction type.
-
-        Useful for populating a settings UI with the current state of all toggles.
-        """
+        # Returns {DistractionType: bool} for every distraction type
         cursor = self.db.cursor()
         cursor.execute("SELECT * FROM user_settings WHERE id = 1")
         row = cursor.fetchone()

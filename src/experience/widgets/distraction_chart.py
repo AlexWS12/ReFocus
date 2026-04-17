@@ -18,7 +18,7 @@ _COLORS = [
 
 
 class DistractionChart(QFrame):
-    """Horizontal bar chart of distraction types ranked by frequency."""
+    # Horizontal bar chart of distraction types ranked by frequency
 
     def __init__(self, parent):
         super().__init__(parent)

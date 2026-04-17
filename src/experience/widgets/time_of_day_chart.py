@@ -15,7 +15,7 @@ _LABELS = {"morning": "Morning", "afternoon": "Afternoon", "evening": "Evening",
 
 
 class TimeOfDayChart(QFrame):
-    """Bar chart comparing average focus score across time-of-day buckets."""
+    # Bar chart comparing average focus score across time-of-day buckets
 
     def __init__(self, parent):
         super().__init__(parent)

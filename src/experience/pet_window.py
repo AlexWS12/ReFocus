@@ -15,7 +15,7 @@ _BUBBLE_COOLDOWN_SECS = 15
 
 
 class SpeechBubble(QWidget):
-    """Rounded speech-bubble tooltip that floats above the pet."""
+    # Rounded speech-bubble tooltip that floats above the pet
 
     TAIL_H = 10
 
@@ -142,11 +142,7 @@ class petWindow(QMainWindow):
         return super().eventFilter(obj, event)
 
     def show_speech_bubble(self, distraction_type: str):
-        """Display a speech bubble above the pet for the given distraction type.
-
-        Ignores calls that arrive within _BUBBLE_COOLDOWN_SECS of the last
-        bubble to avoid spamming the user.
-        """
+        # Display a speech bubble above the pet for the given distraction type
         if not self.isVisible():
             return
 

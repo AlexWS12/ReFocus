@@ -104,7 +104,7 @@ class Settings(QWidget):
     # --- Dirty-state tracking ---------------------------------------------------
 
     def _check_dirty(self):
-        """Compare current UI values against saved settings; bold Apply if they differ."""
+        # Compare current UI values against saved settings; bold Apply if they differ
         saved = settings_manager.load()
 
         # Enabled distractions
@@ -159,14 +159,14 @@ class Settings(QWidget):
         self.calibrate_gaze_btn.setEnabled(True)
 
     def _refresh_thresholds(self):
-        """Reload detection threshold fields from settings.json after calibration."""
+        # Reload detection threshold fields from settings.json after calibration
         saved = settings_manager.detection_thresholds()
         for key, field in self.detection_thresholds_panel.fields.items():
             value = saved.get(key)
             field.setText(str(value) if value is not None else "")
 
     def _refresh_profile_combo(self):
-        """Repopulate the profile dropdown from saved profiles."""
+        # Repopulate the profile dropdown from saved profiles
         current = self.profile_combo.currentText()
         self.profile_combo.clear()
         for name in settings_manager.list_profiles():
@@ -180,7 +180,7 @@ class Settings(QWidget):
                 self.profile_combo.setCurrentIndex(idx)
 
     def _load_selected_profile(self):
-        """Populate all settings fields from the selected profile."""
+        # Populate all settings fields from the selected profile
         name = self.profile_combo.currentText()
         if not name:
             return
@@ -207,7 +207,7 @@ class Settings(QWidget):
         settings_manager.save_profile(name, profile)  # marks active, no extra disk read
 
     def _save_profile_as(self):
-        """Save current field values as a named profile, prompting for the name."""
+        # Save current field values as a named profile, prompting for the name
         suggested = self.profile_combo.currentText() or ""
         name, ok = QInputDialog.getText(self, "Save Profile", "Profile name:", text=suggested)
         if not ok or not name.strip():
@@ -235,7 +235,7 @@ class Settings(QWidget):
         self._refresh_profile_combo()
 
     def _delete_selected_profile(self):
-        """Delete the currently selected profile."""
+        # Delete the currently selected profile
         name = self.profile_combo.currentText()
         if not name:
             return

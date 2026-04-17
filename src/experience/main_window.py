@@ -19,7 +19,7 @@ class MainWindow(QMainWindow):
         self.data = app.database_reader.get_topbar_data()
 
         # set up the main window
-        self.setWindowTitle("Study Tracker Partner")
+        self.setWindowTitle("ReFocus")
         self.setMinimumWidth(860)
         self.setMinimumHeight(700)
 

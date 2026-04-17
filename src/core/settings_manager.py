@@ -39,11 +39,7 @@ _DEFAULTS = {
 
 
 def _deep_merge(defaults: dict, loaded: dict) -> dict:
-    """Return *defaults* with any keys present in *loaded* overwritten.
-
-    Top-level dict values (e.g. profiles, detection_thresholds) are merged
-    key-by-key so that new default sub-keys appear without wiping loaded data.
-    """
+    # Return *defaults* with any keys present in *loaded* overwritten
     merged = dict(defaults)
     for key, value in loaded.items():
         if key not in merged:
@@ -56,13 +52,13 @@ def _deep_merge(defaults: dict, loaded: dict) -> dict:
 
 
 def ensure_defaults() -> None:
-    """Write the default settings.json to disk if it does not already exist."""
+    # Write the default settings.json to disk if it does not already exist
     if not _SETTINGS_PATH.exists():
         save(dict(_DEFAULTS))
 
 
 def load() -> dict:
-    """Read settings from disk, falling back to defaults for missing keys."""
+    # Read settings from disk, falling back to defaults for missing keys
     if _SETTINGS_PATH.exists():
         try:
             with open(_SETTINGS_PATH, "r") as f:
@@ -74,13 +70,13 @@ def load() -> dict:
 
 
 def save(settings: dict) -> None:
-    """Persist the full settings dict to disk."""
+    # Persist the full settings dict to disk
     with open(_SETTINGS_PATH, "w") as f:
         json.dump(settings, f, indent=2)
 
 
 def enabled_distractions() -> set[DistractionType]:
-    """Convenience: load settings and return the enabled types as a set."""
+    # Convenience: load settings and return the enabled types as a set
     raw = load().get("enabled_distractions", [])
     result: set[DistractionType] = set()
     for value in raw:
@@ -92,11 +88,7 @@ def enabled_distractions() -> set[DistractionType]:
 
 
 def detection_thresholds() -> dict[str, float | None]:
-    """Load settings and return detection thresholds.
-
-    Returns a dict with keys matching _DEFAULT_DETECTION_THRESHOLDS.
-    Phone detection values may be None if calibration hasn't run yet.
-    """
+    # Load settings and return detection thresholds
     raw = load().get("detection_thresholds", {})
     result: dict[str, float | None] = {}
     for key, default in _DEFAULT_DETECTION_THRESHOLDS.items():
@@ -112,17 +104,17 @@ def detection_thresholds() -> dict[str, float | None]:
 
 
 def list_profiles() -> list[str]:
-    """Return sorted profile names."""
+    # Return sorted profile names
     return sorted(load().get("profiles", {}).keys())
 
 
 def load_profile(name: str) -> dict | None:
-    """Return the settings snapshot for a named profile, or None if not found."""
+    # Return the settings snapshot for a named profile, or None if not found
     return load().get("profiles", {}).get(name)
 
 
 def save_profile(name: str, profile: dict) -> None:
-    """Save or overwrite a named profile. Profile contains thresholds, enabled_distractions, distraction_weights."""
+    # Save or overwrite a named profile
     settings = load()
     settings.setdefault("profiles", {})[name] = profile
     settings["active_profile"] = name
@@ -130,7 +122,7 @@ def save_profile(name: str, profile: dict) -> None:
 
 
 def delete_profile(name: str) -> None:
-    """Remove a named profile. Clears active_profile if it was the deleted one."""
+    # Remove a named profile
     settings = load()
     settings.get("profiles", {}).pop(name, None)
     if settings.get("active_profile") == name:
@@ -143,11 +135,7 @@ def active_profile_name() -> str | None:
 
 
 def distraction_weights() -> dict[DistractionType, float]:
-    """Load settings and return per-type severity weights.
-
-    Falls back to _DEFAULT_WEIGHTS for any missing or invalid entries
-    so calculate_score always has a complete map.
-    """
+    # Load settings and return per-type severity weights
     raw = load().get("distraction_weights", {})
     result: dict[DistractionType, float] = {}
     for dt in DistractionType:

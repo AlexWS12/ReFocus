@@ -20,7 +20,7 @@ _LABELS = {
 
 
 class SessionLengthChart(QFrame):
-    """Bar chart comparing average focus score across session-length brackets."""
+    # Bar chart comparing average focus score across session-length brackets
 
     def __init__(self, parent):
         super().__init__(parent)

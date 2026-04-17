@@ -14,7 +14,7 @@ from src.intelligence.pet_manager import PetManager
 
 
 class ReportPetWidget(QFrame):
-    """Overlay widget with a pet and a left-side insight card."""
+    # Overlay widget with a pet and a left-side insight card
     layout_changed = Signal()
 
     def __init__(self, parent=None):

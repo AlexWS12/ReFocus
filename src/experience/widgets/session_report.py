@@ -19,7 +19,7 @@ def _fmt_duration(seconds: int) -> str:
 
 
 class _ScoreRing(QFrame):
-    """Large centred score with a coloured border ring."""
+    # Large centred score with a coloured border ring
 
     def __init__(self, score: int, parent=None):
         super().__init__(parent)
@@ -56,7 +56,7 @@ class _ScoreRing(QFrame):
 
 
 class _StatCard(QFrame):
-    """Small metric card: title on top, value below."""
+    # Small metric card: title on top, value below
 
     def __init__(self, title: str, value: str, parent=None):
         super().__init__(parent)
@@ -70,7 +70,7 @@ class _StatCard(QFrame):
 
 
 class _DistractionRow(QWidget):
-    """Single row in the distraction breakdown: label · count · time."""
+    # Single row in the distraction breakdown: label · count · time
 
     def __init__(self, label: str, count: int, time_s: int, parent=None):
         super().__init__(parent)
@@ -94,7 +94,7 @@ class _DistractionRow(QWidget):
 
 
 class SessionReport(QWidget):
-    """Post-session report shown inside the Session page after stopping."""
+    # Post-session report shown inside the Session page after stopping
 
     def __init__(self, parent=None):
         super().__init__(parent)

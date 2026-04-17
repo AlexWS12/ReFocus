@@ -676,7 +676,7 @@ class PatternAnalyzer:
         return cursor.fetchall()
 
     def generate_session_report(self, session_id: int, output_path: str = None) -> str | None:
-        """Generate a per-session distraction summary as a JSON file."""
+        # Generate a per-session distraction summary as a JSON file
         cursor = self.db.cursor()
         cursor.execute('''
             SELECT id, start_time, end_time, duration, focused_time,
@@ -758,7 +758,7 @@ class PatternAnalyzer:
 
     def generate_insights_report(self, output_path: str = None,
                                   last_analyzed_count: int = 0) -> str | None:
-        """Generate the rolling insights report as a JSON file."""
+        # Generate the rolling insights report as a JSON file
         if not self.should_update(last_analyzed_count):
             return None
         analysis = self.analyze()

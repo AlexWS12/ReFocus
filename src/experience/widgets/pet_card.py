@@ -4,7 +4,7 @@ from PySide6.QtGui import QPixmap, QCursor
 
 
 class PetCard(QFrame):
-    """Clickable card showing a pet thumbnail, name, and purchase/equip status."""
+    # Clickable card showing a pet thumbnail, name, and purchase/equip status
 
     clicked = Signal(str)
 

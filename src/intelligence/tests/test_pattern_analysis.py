@@ -1,13 +1,4 @@
-"""
-Pytest-based tests for PatternAnalyzer, covering both the rule-based
-sub-analyses and the three scikit-learn ML methods.
-
-Run with:
-    pytest src/intelligence/tests/test_pattern_analysis.py -v
-
-Or directly:
-    python src/intelligence/tests/test_pattern_analysis.py
-"""
+# Pytest-based tests for PatternAnalyzer, covering both the rule-based sub-analyses and the three scikit-learn ML methods
 
 import json
 import os
@@ -35,7 +26,7 @@ from generate_mock_db import create_mock_database
 
 @pytest.fixture
 def analyzer_empty(tmp_path):
-    """PatternAnalyzer backed by a fresh empty database (0 sessions)."""
+    # PatternAnalyzer backed by a fresh empty database (0 sessions)
     db = Database(db_path=str(tmp_path / "empty.db"))
     analyzer = PatternAnalyzer()
     analyzer.db = db._get_connection()
@@ -45,7 +36,7 @@ def analyzer_empty(tmp_path):
 
 @pytest.fixture
 def analyzer_mock(tmp_path):
-    """PatternAnalyzer backed by the full 20-session mock database."""
+    # PatternAnalyzer backed by the full 20-session mock database
     db_path = str(tmp_path / "mock.db")
     create_mock_database(db_path)
     db = Database(db_path=db_path)
@@ -57,7 +48,7 @@ def analyzer_mock(tmp_path):
 
 @pytest.fixture
 def full_analysis(analyzer_mock):
-    """Pre-computed analyze() result from the mock database."""
+    # Pre-computed analyze() result from the mock database
     return analyzer_mock.analyze()
 
 
