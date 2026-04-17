@@ -108,6 +108,8 @@ class Session(QWidget):
         app.main_window.show()
         app.main_window.raise_()
 
+        app.main_window.topbar.refresh(app.database_reader.get_topbar_data())
+
     def _back_to_dashboard(self):
         app = QtApplication.instance()
         self._stack.setCurrentIndex(_CTA_VIEW)

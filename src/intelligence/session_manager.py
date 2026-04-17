@@ -137,9 +137,13 @@ def _calculate_level(exp):
     # Level 1 is the floor — a player at 0 XP is still level 1, not level 0.
     # Every 110 XP earned crosses a level boundary:
     #   0–110 XP → level 1,  111–220 → level 2,  700–770 → level 7, etc.
-    if exp <= 0:
-        return 1
-    return max(1, math.ceil(exp / 110))
+        if exp <= 0:
+            return 1
+        level = 1
+        while exp >= (75 * level ** 1.4):
+            exp -= (75 * level ** 1.4)
+            level += 1
+        return level
 
 
 class SessionManager:

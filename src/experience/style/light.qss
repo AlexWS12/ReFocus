@@ -178,3 +178,8 @@ QLabel#achievementText {
     font-weight: bold;
     background: transparent;
 }
+QProgressBar#xpBar::chunk {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+        stop:0 #3b7deb, stop:1 #63a4ff);
+    border-radius: 8px;
+}
