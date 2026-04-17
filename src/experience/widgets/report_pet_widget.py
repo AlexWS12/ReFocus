@@ -14,7 +14,7 @@ from src.intelligence.pet_manager import PetManager
 
 
 class ReportPetWidget(QFrame):
-    """Overlay widget with a pet and a left-side insight card."""
+    # Overlay widget with a pet and a left-side insight card
     layout_changed = Signal()
 
     def __init__(self, parent=None):
@@ -91,14 +91,16 @@ class ReportPetWidget(QFrame):
     def _refresh_title(self):
         self.title.setText(self._title_text())
 
+
     def refresh(self, report_data: dict):
+          
         self.pet_view.refresh()
         self.title.setText(self._title_text())
 
         insights = (
-        ((report_data or {}).get("pattern_analysis") or {})
-        .get("insights", [])
-    )
+            ((report_data or {}).get("pattern_analysis") or {})
+            .get("insights", [])
+        )
         self.message.setText(self._pick_message(insights, report_data or {}))
         self._reset_fade_timer()
 
@@ -110,6 +112,9 @@ class ReportPetWidget(QFrame):
         self.adjustSize()
         self.layout_changed.emit()
         self._fade_timer.start(10000)
+
+    def mouseDoubleClickEvent(self, event):
+        self.hide()
 
     def _fade_out_card(self):
         self._fade_anim.stop()

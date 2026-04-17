@@ -15,11 +15,7 @@ _yolo_cls = None
 
 
 def _import_symbol(primary_module: str, fallback_module: str, symbol: str):
-    """Resolve a symbol via project-root package path first, then local path.
-
-    This keeps camera.py importable both as `src.vision.camera` and as `camera`
-    without mutating sys.path.
-    """
+    # Resolve a symbol via project-root package path first, then local path
     for module_path in (primary_module, fallback_module):
         try:
             return getattr(importlib.import_module(module_path), symbol)
@@ -31,11 +27,7 @@ def _import_symbol(primary_module: str, fallback_module: str, symbol: str):
 
 
 def _get_gaze_tracker_cls():
-    """Return the gaze tracker class, importing it once on first use.
-
-    Lazy loading keeps vision helper modules lightweight when only calibration
-    or menu actions are needed.
-    """
+    # Return the gaze tracker class, importing it once on first use
     global _gaze_tracker_cls
     if _gaze_tracker_cls is None:
         _gaze_tracker_cls = _import_symbol(
@@ -47,7 +39,7 @@ def _get_gaze_tracker_cls():
 
 
 def _get_phone_calibration_cls():
-    """Return the phone calibration class, importing it once on first use."""
+    # Return the phone calibration class, importing it once on first use
     global _phone_calibration_cls
     if _phone_calibration_cls is None:
         _phone_calibration_cls = _import_symbol(
@@ -59,11 +51,7 @@ def _get_phone_calibration_cls():
 
 
 def _get_yolo_cls():
-    """Return the YOLO class, importing ultralytics lazily on first use.
-
-    This keeps module import overhead low for helper-only/test paths that do not
-    instantiate the runtime camera pipeline.
-    """
+    # Return the YOLO class, importing ultralytics lazily on first use
     global _yolo_cls
     if _yolo_cls is None:
         _yolo_cls = _import_symbol("ultralytics", "ultralytics", "YOLO")
@@ -71,12 +59,7 @@ def _get_yolo_cls():
 
 
 def _import_distraction_type():
-    """Lazily resolve DistractionType from the sibling intelligence package.
-
-    Tries the project-root path first (src.intelligence.session_manager),
-    then the flat module name used when running directly from src/vision.
-    Returns None if the intelligence package is unavailable.
-    """
+    # Lazily resolve DistractionType from the sibling intelligence package
     for module_path in ("src.intelligence.session_manager", "session_manager"):
         try:
             return getattr(importlib.import_module(module_path), "DistractionType")
@@ -86,7 +69,7 @@ def _import_distraction_type():
 
 
 def _get_distraction_type():
-    """Resolve DistractionType once and cache it for subsequent calls."""
+    # Resolve DistractionType once and cache it for subsequent calls
     global _DistractionType
     if _DistractionType is None:
         _DistractionType = _import_distraction_type()
@@ -94,22 +77,10 @@ def _get_distraction_type():
 
 
 class Camera:
-    """Manages webcam capture, phone detection (YOLO), and eye tracking.
-
-    Designed to run as a lightweight background process.  YOLO is frame-skipped
-    so inference only fires every ``yolo_frame_skip`` frames; cached boxes are
-    reused in between via ByteTrack continuity.
-    """
+    # Manages webcam capture, phone detection (YOLO), and eye tracking
 
     def __init__(self, model_path="yolo26n.pt", session_manager=None, camera_index: int = 0):
-        """Initialise camera, YOLO model, and eye tracker.
-
-        Args:
-            model_path: Path to the YOLO model weights.
-            session_manager: Optional SessionManager instance. When provided,
-                resolved phone and look-away events are logged via log_distraction().
-            camera_index: OS device index passed to ``cv.VideoCapture``.
-        """
+        # Initialise camera, YOLO model, and eye tracker
         # YOLO stays in __init__ so heavy model load happens only when camera runtime starts.
         self.model = _get_yolo_cls()(model_path)
         self.cap = cv.VideoCapture(camera_index)
@@ -166,23 +137,7 @@ class Camera:
     # ------------------------------------------------------------------
 
     def _load_few_shot_bundle(self):
-        """Load calibration-derived thresholds and exemplars from the saved bundle.
-
-        Sets yolo_conf_threshold, few_shot_similarity_threshold, and
-        fallback_conf_threshold from values computed during calibration.
-        All three remain None if the bundle is missing or corrupt, signalling
-        that the user must run phone calibration before launching the camera.
-
-        [INTELLIGENCE TEAM] conf_threshold and threshold_global must be present
-        in the .npz bundle written by PhoneCalibration._save_few_shot_bundle().
-        If either key is missing the camera will refuse to start (calibrated=False).
-
-        [UX/UI TEAM] yolo_conf_threshold, few_shot_similarity_threshold, and
-        fallback_conf_threshold are the three values users should be able to
-        adjust from the settings panel without re-running calibration. Expose
-        them as sliders/inputs and write back to cam.yolo_conf_threshold etc.
-        at runtime — no restart needed.
-        """
+        # Load calibration-derived thresholds and exemplars from the saved bundle
         if not os.path.exists(self.few_shot_bundle_path):
             self.detection_params["few_shot_enabled"] = False
             return
@@ -233,12 +188,7 @@ class Camera:
             self.calibrated = False
 
     def _apply_settings_overrides(self):
-        """Apply user-configured detection thresholds from settings.json.
-
-        Runs after _load_few_shot_bundle() so calibration values are loaded
-        first, then overridden by any non-None user settings. Also applies
-        gaze angle thresholds to the eye_tracker instance.
-        """
+        # Apply user-configured detection thresholds from settings.json
         try:
             from src.core import settings_manager
             thresholds = settings_manager.detection_thresholds()
@@ -266,7 +216,7 @@ class Camera:
     # ------------------------------------------------------------------
 
     def _get_guide_box(self, frame_shape):
-        """Use the same centered phone guide-box dimensions as calibration."""
+        # Use the same centered phone guide-box dimensions as calibration
         height, width = frame_shape[:2]
         # 22.4% wide × 47% tall keeps the guide box phone-sized across common resolutions
         box_width = int(width * 0.224)
@@ -282,7 +232,7 @@ class Camera:
     # ------------------------------------------------------------------
 
     def _extract_crop_from_coords(self, frame, x1, y1, x2, y2, pad_ratio: float = 0.12):
-        """Crop and pad around raw pixel coordinates for few-shot matching."""
+        # Crop and pad around raw pixel coordinates for few-shot matching
         h, w = frame.shape[:2]
         bw = max(1, x2 - x1)
         bh = max(1, y2 - y1)
@@ -298,7 +248,7 @@ class Camera:
         return frame[cy1:cy2, cx1:cx2]
 
     def _compute_few_shot_signature(self, crop):
-        """Match calibration descriptor: normalized HS histogram + edge-density feature."""
+        # Match calibration descriptor: normalized HS histogram + edge-density feature
         if crop is None or crop.size == 0:
             return None
 
@@ -328,7 +278,7 @@ class Camera:
         return sig / norm
 
     def _few_shot_similarity(self, signature) -> float:
-        """Return max cosine similarity against persisted few-shot exemplars."""
+        # Return max cosine similarity against persisted few-shot exemplars
         if signature is None or not self.few_shot_signatures:
             return 0.0
         # Take the highest similarity across all exemplars (nearest-neighbor style)
@@ -340,7 +290,7 @@ class Camera:
     # ------------------------------------------------------------------
 
     def calibrate(self) -> bool:
-        """Run interactive calibration before starting detection."""
+        # Run interactive calibration before starting detection
         calibrator = _get_phone_calibration_cls()()
         result = calibrator.run_calibration()  # Uses new multi-phase flow
 
@@ -359,18 +309,7 @@ class Camera:
     # ------------------------------------------------------------------
 
     def read_frame(self):
-        """Capture a frame, run phone detection and eye tracking.
-
-        Returns:
-            tuple: (original_frame, annotated_frame) or None if capture fails.
-
-        Detection pipeline
-        ------------------
-        1. YOLO inference — every ``yolo_frame_skip`` frames; cached boxes reused in between.
-        2. Spatial filter — guide-box gate when uncalibrated.
-        3. Appearance filter — few-shot cosine-similarity gate when calibrated.
-        4. Best-confidence selection.
-        """
+        # Capture a frame, run phone detection and eye tracking
         # Enforce FPS cap: sleep for whatever time remains in the current frame budget.
         now = time.time()
         elapsed = now - self._last_frame_time
@@ -535,19 +474,7 @@ class Camera:
         return frame, annotated
 
     def _get_attention_ui_state(self, attention_data: dict) -> tuple[str, tuple[int, int, int]]:
-        """Return a user-facing 3-state attention label for the on-frame overlay.
-
-        States:
-        - ATTENTIVE: face present and facing screen.
-        - LOOK_AWAY: face present but not facing screen, OR face absent for < LEFT_DESK threshold.
-        - LEFT_DESK: face has been continuously absent for >= _LEFT_DESK_TRANSITION_SECONDS.
-
-        UI state is driven by *current sensor data*, not by the distraction tracking cooldown.
-        _left_desk_distraction_start / _look_away_distraction_start stay open during their
-        cooldown windows (so the logger can merge flickers into one event) but that must NOT
-        bleed into the attention overlay — the user should see ATTENTIVE the moment their face
-        returns and is facing the screen.
-        """
+        # Return a user-facing 3-state attention label for the on-frame overlay
         face_present = attention_data.get("face_present", True)
         face_facing_screen = attention_data.get("face_facing_screen", True)
 
@@ -568,18 +495,7 @@ class Camera:
         return "LOOK_AWAY", (0, 165, 255)
 
     def _update_distraction_tracking(self, phone_detected: bool) -> None:
-        """Track distraction events with cooldown merging and priority suppression.
-
-        Cooldown: when a trigger disappears, the event stays open for
-        ``_DISTRACTION_COOLDOWN`` seconds.  If the trigger reappears inside
-        that window, the event continues seamlessly.  Duration is measured
-        from start to last-seen (not start to cooldown-expiry).
-
-        Priority: phone distraction outranks look-away/left-desk only while
-        they overlap in the same frame. Once phone is no longer detected,
-        non-phone tracking can continue immediately (phone cooldown does not
-        suppress other types).
-        """
+        # Track distraction events with cooldown merging and priority suppression
         distraction_type = _get_distraction_type()
         if self._session_manager is None or distraction_type is None:
             return
@@ -702,20 +618,13 @@ class Camera:
                     self._look_away_last_seen = None
 
     def release(self):
-        """Release camera resources and close windows.
-
-        Flushes any open distraction events so they are not silently lost.
-        """
+        # Release camera resources and close windows
         self._flush_open_distractions()
         self.cap.release()
         cv.destroyAllWindows()
 
     def _flush_open_distractions(self) -> None:
-        """Log any in-progress distraction events before the camera shuts down.
-
-        Uses last_seen (not now) so duration reflects actual distraction time,
-        not time spent waiting for the cooldown to expire.
-        """
+        # Log any in-progress distraction events before the camera shuts down
         distraction_type = _get_distraction_type()
         if self._session_manager is None or distraction_type is None:
             return

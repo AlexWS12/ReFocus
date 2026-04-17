@@ -19,7 +19,7 @@ else:
     msvcrt = None
 
 def _import_symbol(primary_module: str, fallback_module: str, symbol: str):
-    """Import symbol from project-root path first, then direct-run fallback path."""
+    # Import symbol from project-root path first, then direct-run fallback path
     for module_path in (primary_module, fallback_module):
         try:
             return getattr(importlib.import_module(module_path), symbol)
@@ -34,13 +34,7 @@ console = Console()
 
 
 def launch_camera() -> None:
-    """Run the camera loop with phone and attention overlays.
-
-    Requires phone calibration to have been run at least once — the detection
-    thresholds (YOLO confidence, appearance similarity gate, fallback gate) are
-    loaded exclusively from the calibration bundle. If the bundle is missing the
-    user is redirected to calibrate before the camera starts.
-    """
+    # Run the camera loop with phone and attention overlays
     # OpenCV import is local so calibration-only menu usage stays lightweight.
     import cv2 as cv
 
@@ -96,7 +90,7 @@ def launch_camera() -> None:
 
 
 def calibrate_phone_detection() -> None:
-    """Run the existing YOLO phone calibration flow."""
+    # Run the existing YOLO phone calibration flow
     PhoneCalibration = _import_symbol(
         "src.vision.detectors.phone_calibration",
         "detectors.phone_calibration",
@@ -110,7 +104,7 @@ def calibrate_phone_detection() -> None:
 
 
 def calibrate_gaze_center() -> None:
-    """Calibrate neutral gaze center offsets used by attention tracker."""
+    # Calibrate neutral gaze center offsets used by attention tracker
     GazeCalibrator = _import_symbol(
         "src.vision.Trackers.gaze_calibration",
         "Trackers.gaze_calibration",
@@ -127,7 +121,7 @@ def calibrate_gaze_center() -> None:
 
 
 def main() -> None:
-    """Minimal modular vision menu."""
+    # Minimal modular vision menu
     while True:
         console.print(
             Panel.fit(

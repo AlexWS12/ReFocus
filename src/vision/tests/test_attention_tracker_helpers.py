@@ -1,8 +1,4 @@
-"""Focused unit tests for attention-tracker helper logic.
-
-These tests validate permissiveness and transient-dropout handling without
-starting the full MediaPipe detector.
-"""
+# Focused unit tests for attention-tracker helper logic
 
 import importlib
 import os
@@ -10,7 +6,7 @@ import sys
 
 
 def _import(primary: str, fallback: str, symbol: str):
-    """Try project-root import first, then direct-run fallback."""
+    # Try project-root import first, then direct-run fallback
     for mod in (primary, fallback):
         try:
             return getattr(importlib.import_module(mod), symbol)

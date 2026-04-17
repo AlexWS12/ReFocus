@@ -47,7 +47,7 @@ class Setup(QWidget):
         self.layout.addWidget(start_btn)
 
     def _populate_cameras(self) -> None:
-        """Discover available cameras and fill the combo box."""
+        # Discover available cameras and fill the combo box
         self.camera_combo.blockSignals(True)
         self.camera_combo.clear()
         cameras = list_cameras()
@@ -62,7 +62,7 @@ class Setup(QWidget):
         self.camera_combo.blockSignals(False)
 
     def _on_camera_changed(self, combo_index: int) -> None:
-        """Switch the vision pipeline to the newly selected camera."""
+        # Switch the vision pipeline to the newly selected camera
         if combo_index < 0:
             return
         device_index = self.camera_combo.itemData(combo_index)

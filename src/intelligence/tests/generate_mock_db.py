@@ -1,8 +1,4 @@
-"""
-Generates mock_data.db — a fake SQLite database for UI development.
-Run this script once to (re)create the mock database:
-    python generate_mock_db.py
-"""
+# Generates mock_data.db — a fake SQLite database for UI development
 
 import os
 import sys
@@ -17,7 +13,7 @@ DB_PATH = os.path.join(os.path.dirname(__file__), "mock_data.db")
 
 
 def reset_tables(conn):
-    """Clear seeded tables so a fresh mock dataset can be rebuilt deterministically."""
+    # Clear seeded tables so a fresh mock dataset can be rebuilt deterministically
     conn.execute("DELETE FROM events")
     conn.execute("DELETE FROM achievements")
     conn.execute("DELETE FROM sessions")
@@ -180,7 +176,7 @@ def seed_achievements(conn):
 
 
 def create_mock_database(db_path: str = DB_PATH) -> str:
-    """Create a fresh mock database using the production schema and seeded UI data."""
+    # Create a fresh mock database using the production schema and seeded UI data
     if os.path.exists(db_path):
         os.remove(db_path)
 

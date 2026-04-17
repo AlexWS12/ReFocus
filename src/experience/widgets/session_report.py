@@ -19,7 +19,7 @@ def _fmt_duration(seconds: int) -> str:
 
 
 class _ScoreRing(QFrame):
-    """Large centred score with a coloured border ring."""
+    # Large centred score with a coloured border ring
 
     def __init__(self, score: int, parent=None):
         super().__init__(parent)
@@ -56,7 +56,7 @@ class _ScoreRing(QFrame):
 
 
 class _StatCard(QFrame):
-    """Small metric card: title on top, value below."""
+    # Small metric card: title on top, value below
 
     def __init__(self, title: str, value: str, parent=None):
         super().__init__(parent)
@@ -70,7 +70,7 @@ class _StatCard(QFrame):
 
 
 class _DistractionRow(QWidget):
-    """Single row in the distraction breakdown: label · count · time."""
+    # Single row in the distraction breakdown: label · count · time
 
     def __init__(self, label: str, count: int, time_s: int, parent=None):
         super().__init__(parent)
@@ -94,15 +94,14 @@ class _DistractionRow(QWidget):
 
 
 class SessionReport(QWidget):
-    """Post-session report shown inside the Session page after stopping."""
+    # Post-session report shown inside the Session page after stopping
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._root = QVBoxLayout(self)
         self._root.setAlignment(Qt.AlignTop)
 
-    def load(self, report: dict):
-        """Populate the report from a session_report() dict. Clears previous content."""
+    def load(self, report: dict, feedback: str = ""):
         self._clear()
 
         score = report.get("score", 0) or 0
@@ -143,9 +142,23 @@ class SessionReport(QWidget):
         if breakdown is not None:
             self._root.addWidget(breakdown)
 
+        # --- Brief feedback ---
+        if feedback:
+            self._root.addSpacing(8)
+            fb_card = QFrame()
+            fb_card.setObjectName("statCard")
+            fb_card.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            fb_layout = QVBoxLayout(fb_card)
+            fb_label = QLabel(feedback)
+            fb_label.setWordWrap(True)
+            fb_label.setAlignment(Qt.AlignLeft)
+            fb_label.setStyleSheet("font-size: 13px; padding: 4px;")
+            fb_layout.addWidget(fb_label)
+            self._root.addWidget(fb_card)
+
     def _build_breakdown(self, report: dict, total_distracted: int) -> QFrame | None:
         rows = [
-            ("Phone", report.get("phone_distractions", 0), None),
+            ("Phone", report.get("phone_distractions", 0), report.get("phone_time", 0)),
             ("Looked Away", report.get("look_away_distractions", 0), report.get("look_away_time", 0)),
             ("Left Desk", report.get("left_desk_distractions", 0), report.get("time_away", 0)),
             ("App", report.get("app_distractions", 0), None),

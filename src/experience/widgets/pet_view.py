@@ -26,7 +26,7 @@ class PetView(QWidget):
     squishing the pet.
     """
 
-    def __init__(self, parent=None, size: int = 160):
+    def __init__(self, parent=None, size: int = 140):
         super().__init__(parent)
         self._size = size
         self._headroom = int(size * _HAT_HEADROOM_RATIO)
@@ -79,3 +79,15 @@ class PetView(QWidget):
             Qt.KeepAspectRatio, Qt.SmoothTransformation,
         )
         self.label.setPixmap(scaled)
+
+
+class CompactPetView(PetView):
+    """Smaller `PetView` variant used on the Virtual Pet page.
+
+    Inherits the same rendering logic as `PetView` but defaults to a
+    smaller body size so the full page (preview + catalog + accessories)
+    fits within the main window without scrolling.
+    """
+
+    def __init__(self, parent=None, size: int = 110):
+        super().__init__(parent, size=size)

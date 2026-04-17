@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QTimer, Signal, QObject
+from PySide6.QtGui import QIcon
 
 from src.experience.main_window import MainWindow
 from src.experience.pet_window import petWindow
@@ -25,6 +26,17 @@ class QApplication(QApplication):
         super().__init__()
         self.signals = AppSignals()
 
+        icon_path = (
+            Path(__file__).resolve().parent.parent
+            / "experience"
+            / "static"
+            / "pets"
+            / "cat"
+            / "Cat.png"
+        )
+        if icon_path.exists():
+            self.setWindowIcon(QIcon(str(icon_path)))
+
         settings_manager.ensure_defaults()
 
         # Load global stylesheet
@@ -36,6 +48,10 @@ class QApplication(QApplication):
         self.database_reader = DatabaseReader()
         self.vision_manager = VisionManager(self)
         self.session_manager = SessionManager()
+
+        # kick off ML analysis in background immediately so it's ready
+        # by the time the user opens the Report page
+        self.database_reader.run_analysis_async()
 
         self.main_window = MainWindow()
         self.main_window.show()

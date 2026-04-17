@@ -18,12 +18,7 @@ _ROW_STYLE = (
 
 
 class DistractionList(QFrame):
-    """Scrollable list that live-updates with distractions logged during the active session.
-
-    Consecutive events of the same type within a short time window are merged
-    into a single row whose duration accumulates, so the list stays readable
-    instead of filling with repeated entries.
-    """
+    # Scrollable list that live-updates with distractions logged during the active session
 
     def __init__(self, parent=None):
         super().__init__(parent)

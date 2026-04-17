@@ -19,7 +19,7 @@ _TREND_COLORS = {
 
 
 class FocusTrendChart(QFrame):
-    """Line chart showing raw scores and a rolling-average overlay."""
+    # Line chart showing raw scores and a rolling-average overlay
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -55,7 +55,8 @@ class FocusTrendChart(QFrame):
 
         if pa is None:
             self._trend_label.setStyleSheet("font-size: 15px;")
-            self._trend_label.setText("Need 10+ sessions for trend analysis")
+            total = (data.get("session_analytics") or {}).get("total_sessions", 0) or 0
+            self._trend_label.setText("Analysing..." if total >= 10 else f"Need {10 - total} more sessions for trend analysis")
             return
         self._trend_label.setStyleSheet("")
 

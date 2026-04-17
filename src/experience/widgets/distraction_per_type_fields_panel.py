@@ -8,7 +8,7 @@ from src.intelligence.session_manager import DistractionType
 
 
 class DistractionPerTypeFieldsPanel(QFrame):
-    """One labeled text field per distraction type (skeleton — not wired to logic yet)."""
+    # One labeled text field per distraction type (skeleton — not wired to logic yet)
 
     def __init__(self, title: str, field_placeholder: str, parent=None):
         super().__init__(parent)
@@ -48,7 +48,7 @@ class DistractionImportancePanel(DistractionPerTypeFieldsPanel):
             field.setText(str(saved[dtype]))
 
     def get_weights(self) -> dict[DistractionType, float]:
-        """Return current field values as floats, falling back to saved defaults."""
+        # Return current field values as floats, falling back to saved defaults
         saved = settings_manager.distraction_weights()
         result: dict[DistractionType, float] = {}
         for dtype, field in self.fields.items():
@@ -59,19 +59,14 @@ class DistractionImportancePanel(DistractionPerTypeFieldsPanel):
         return result
 
     def set_weights(self, weights: dict[DistractionType, float]) -> None:
-        """Populate weight fields from the given dict."""
+        # Populate weight fields from the given dict
         for dtype, field in self.fields.items():
             if dtype in weights:
                 field.setText(str(weights[dtype]))
 
 
 class DetectionThresholdsPanel(QFrame):
-    """Editable fields for phone-detection and gaze-angle thresholds.
-
-    Loads saved values from settings.json on init. Uncalibrated phone
-    fields show placeholder text. Values are read via get_thresholds()
-    and persisted when the Settings page Apply button is clicked.
-    """
+    # Editable fields for phone-detection and gaze-angle thresholds
 
     _PHONE_FIELDS = [
         ("yolo_conf", "YOLO confidence"),
@@ -126,7 +121,7 @@ class DetectionThresholdsPanel(QFrame):
         self.fields[key] = field
 
     def get_thresholds(self) -> dict[str, float | None]:
-        """Return current field values, preserving None for empty phone fields."""
+        # Return current field values, preserving None for empty phone fields
         defaults = settings_manager.detection_thresholds()
         result: dict[str, float | None] = {}
         for key, field in self.fields.items():
@@ -142,11 +137,7 @@ class DetectionThresholdsPanel(QFrame):
 
 
 class DistractionCountSecondsPanel(DistractionPerTypeFieldsPanel):
-    """Seconds before each distraction type starts counting (skeleton).
-
-    # TODO: Wire to settings_manager (persist/load values) and include in
-    #       profile save/load once the distraction-delay logic is implemented.
-    """
+    # Seconds before each distraction type starts counting (skeleton)
 
     def __init__(self, parent=None):
         super().__init__("Seconds before distraction counts", "Seconds", parent)

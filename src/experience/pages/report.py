@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QGridLayout, QScrollArea,
+    QWidget, QVBoxLayout, QGridLayout, QScrollArea, QLabel,
 )
 from PySide6.QtCore import Qt
 from src.core.qApplication import QApplication
@@ -14,6 +14,9 @@ from src.experience.widgets.time_of_day_chart import TimeOfDayChart
 from src.experience.widgets.session_length_chart import SessionLengthChart
 from src.experience.widgets.peak_hours_chart import PeakHoursChart
 from src.experience.widgets.report_pet_widget import ReportPetWidget
+from src.experience.widgets.forecast_chart import ForecastChart
+from src.experience.widgets.feature_importance_widget import FeatureImportanceWidget
+from src.experience.widgets.ai_insight_widget import AiInsightWidget
 
 
 class Report(QWidget):
@@ -27,19 +30,26 @@ class Report(QWidget):
         self.data['total_exp'] = (parent.data or {}).get('exp', 0)
 
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setContentsMargins(10, 8, 10, 8)
 
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setAlignment(Qt.AlignTop | Qt.AlignHCenter)
         outer.addWidget(scroll)
 
         container = QWidget()
         container.setObjectName("reportContainer")
         self._layout = QVBoxLayout(container)
+        self._layout.setContentsMargins(12, 8, 12, 12)
+        self._layout.setSpacing(10)
         scroll.setWidget(container)
 
         stats_grid = QGridLayout()
+        stats_grid.setHorizontalSpacing(12)
+        stats_grid.setVerticalSpacing(12)
+        stats_grid.setColumnStretch(0, 1)
+        stats_grid.setColumnStretch(1, 1)
         self.lifetime_focus = LifetimeFocus(self)
         self.total_sessions = TotalSessions(self)
         self.longest_focus = LongestFocus(self)
@@ -52,10 +62,21 @@ class Report(QWidget):
 
         self.focus_trend = FocusTrendChart(self)
         self._layout.addWidget(self.focus_trend)
+        self.focus_trend_note = QLabel(
+            "How to read: each point is one session score. The smoothed line helps you see your overall direction, not one-off bad days."
+        )
+        self.focus_trend_note.setObjectName("secondaryLabel")
+        self.focus_trend_note.setWordWrap(True)
+        self.focus_trend_note.setStyleSheet("font-size: 12px; padding: 2px 4px 8px 4px;")
+        self._layout.addWidget(self.focus_trend_note)
 
         charts_section = QWidget()
         charts_section.setObjectName("reportChartsContainer")
         charts_grid = QGridLayout(charts_section)
+        charts_grid.setHorizontalSpacing(12)
+        charts_grid.setVerticalSpacing(12)
+        charts_grid.setColumnStretch(0, 1)
+        charts_grid.setColumnStretch(1, 1)
         self.distraction_chart = DistractionChart(self)
         self.time_of_day_chart = TimeOfDayChart(self)
         self.session_length_chart = SessionLengthChart(self)
@@ -65,6 +86,29 @@ class Report(QWidget):
         charts_grid.addWidget(self.session_length_chart, 1, 0)
         charts_grid.addWidget(self.peak_hours_chart, 1, 1)
         self._layout.addWidget(charts_section)
+        self.behavior_note = QLabel(
+            "How to read: taller bars mean better average focus. Use these charts to choose your best study time and session length."
+        )
+        self.behavior_note.setObjectName("secondaryLabel")
+        self.behavior_note.setWordWrap(True)
+        self.behavior_note.setStyleSheet("font-size: 12px; padding: 2px 4px 8px 4px;")
+        self._layout.addWidget(self.behavior_note)
+
+        ml_section = QWidget()
+        ml_section.setObjectName("reportChartsContainer")
+        ml_grid = QGridLayout(ml_section)
+        ml_grid.setHorizontalSpacing(12)
+        ml_grid.setVerticalSpacing(12)
+        ml_grid.setColumnStretch(0, 1)
+        ml_grid.setColumnStretch(1, 1)
+        self.forecast_chart = ForecastChart(self)
+        self.feature_importance = FeatureImportanceWidget(self)
+        ml_grid.addWidget(self.forecast_chart, 0, 0)
+        ml_grid.addWidget(self.feature_importance, 0, 1)
+        self._layout.addWidget(ml_section)
+
+        self.ai_insight = AiInsightWidget(self)
+        self._layout.addWidget(self.ai_insight)
 
         # Floating pet-insight panel pinned to the report page corner.
         self.pet_widget = ReportPetWidget(self)
@@ -75,8 +119,22 @@ class Report(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        self.pet_widget.show()
+        # refresh fast data immediately from cache (no ML blocking)
         self.data = self.app.database_reader.load_report_data()
-        self.data['total_exp'] = self.app.database_reader.get_topbar_data().get('exp', 0)
+        self.data['total_exp'] = (self.app.database_reader.get_topbar_data() or {}).get('exp', 0)
+        self._refresh_all_widgets()
+        # kick off a fresh background analysis; _on_analysis_ready updates charts when done
+        self.app.database_reader.run_analysis_async(callback=self._on_analysis_ready)
+
+    def _on_analysis_ready(self, result):
+        try:
+            self.data['pattern_analysis'] = result
+            self._refresh_all_widgets()
+        except RuntimeError:
+            pass  # widget was deleted before analysis finished
+
+    def _refresh_all_widgets(self):
         self.lifetime_focus.refresh(self.data)
         self.total_sessions.refresh(self.data)
         self.longest_focus.refresh(self.data)
@@ -86,6 +144,9 @@ class Report(QWidget):
         self.time_of_day_chart.refresh(self.data)
         self.session_length_chart.refresh(self.data)
         self.peak_hours_chart.refresh(self.data)
+        self.forecast_chart.refresh(self.data)
+        self.feature_importance.refresh(self.data)
+        self.ai_insight.refresh(self.data)
         self.pet_widget.refresh(self.data)
         self._position_pet_widget()
 

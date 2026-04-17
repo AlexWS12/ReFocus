@@ -1,4 +1,4 @@
-"""Tests for the seeded mock database generator used by the UI."""
+# Tests for the seeded mock database generator used by the UI
 
 import sqlite3
 
@@ -15,7 +15,7 @@ except ModuleNotFoundError:
 
 
 def test_create_mock_database_seeds_expected_data(tmp_path):
-    """Mock DB builder should create schema and populate representative UI data."""
+    # Mock DB builder should create schema and populate representative UI data
     db_path = tmp_path / "mock_data.db"
 
     created_path = create_mock_database(str(db_path))

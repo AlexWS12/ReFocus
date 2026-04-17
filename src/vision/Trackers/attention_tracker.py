@@ -14,7 +14,7 @@ from mediapipe.tasks.python import vision
 
 
 class gazeTracker:
-    """Tracks whether the user's face is oriented toward the screen."""
+    # Tracks whether the user's face is oriented toward the screen
 
     def __init__(self, calibration_file: str | None = None):
         model_path = os.path.join(os.path.dirname(__file__), "face_landmarker.task")
@@ -64,7 +64,7 @@ class gazeTracker:
         self._cached_data = self._build_default_data()
 
     def _build_default_data(self) -> dict:
-        """Return the default tracking payload shared by cache and no-face cases."""
+        # Return the default tracking payload shared by cache and no-face cases
         return {
             "face_present": False,
             "eyes_detected": False,
@@ -84,11 +84,7 @@ class gazeTracker:
         }
 
     def _is_face_facing_screen(self, yaw: float, pitch: float, roll: float) -> bool:
-        """Classify attention using calibrated bounds plus a small runtime tolerance.
-
-        The tolerance reduces false negatives during integration when different
-        webcams or frame rates make pose estimation slightly noisier.
-        """
+        # Classify attention using calibrated bounds plus a small runtime tolerance
         if self.calibrated_bounds is not None:
             return (
                 (self.calibrated_bounds["yaw_min"] - self.attention_tolerance_deg)
@@ -108,11 +104,7 @@ class gazeTracker:
         )
 
     def _stabilize_tracking_data(self, data: dict, now: float) -> dict:
-        """Keep recent face state briefly to absorb transient detector dropouts.
-
-        This avoids noisy integration behavior where a single missed detection
-        immediately flips attention to no-face/away.
-        """
+        # Keep recent face state briefly to absorb transient detector dropouts
         if data["face_present"]:
             self._last_face_seen_ts = now
             self._last_face_present_data = copy.deepcopy(data)
@@ -130,7 +122,7 @@ class gazeTracker:
         return data
 
     def _load_center_offsets(self) -> dict:
-        """Load persisted center offsets so attention is relative to the screen center, not camera position."""
+        # Load persisted center offsets so attention is relative to the screen center, not camera position
         default_offsets = {"yaw_deg": 0.0, "pitch_deg": 0.0, "roll_deg": 0.0}
         if not os.path.exists(self.calibration_file):
             return default_offsets
@@ -158,7 +150,7 @@ class gazeTracker:
             return default_offsets
 
     def _load_attention_bounds(self) -> dict | None:
-        """Load calibrated yaw/pitch bounds produced by corner-based gaze calibration."""
+        # Load calibrated yaw/pitch bounds produced by corner-based gaze calibration
         if not os.path.exists(self.calibration_file):
             return None
 
@@ -184,7 +176,7 @@ class gazeTracker:
             return None
 
     def set_center_offsets(self, yaw_deg: float, pitch_deg: float, roll_deg: float):
-        """Apply new center offsets immediately and persist them for future runs."""
+        # Apply new center offsets immediately and persist them for future runs
         self.center_offsets = {
             "yaw_deg": float(yaw_deg),
             "pitch_deg": float(pitch_deg),
@@ -198,7 +190,7 @@ class gazeTracker:
             pass
 
     def set_calibration_profile(self, profile: dict):
-        """Apply and persist full calibration profile (center + bounds)."""
+        # Apply and persist full calibration profile (center + bounds)
         center = profile.get("center_offsets", {})
         self.center_offsets = {
             "yaw_deg": float(center.get("yaw_deg", 0.0)),
@@ -242,7 +234,7 @@ class gazeTracker:
             pass
 
     def track_eyes(self, frame):
-        """Annotate frame with face-attention status and pose angles."""
+        # Annotate frame with face-attention status and pose angles
         self._frame_counter += 1
         now = time.monotonic()
         # Both conditions must be true: frame-count gate prevents running on back-to-back
@@ -299,7 +291,7 @@ class gazeTracker:
         return frame
 
     def extract_eye_data(self, landmarks, frame):
-        """Return attention-focused data while keeping previous keys for compatibility."""
+        # Return attention-focused data while keeping previous keys for compatibility
         data = self._build_default_data()
         data["face_present"] = landmarks is not None
         data["eyes_detected"] = landmarks is not None  # Kept for backwards compatibility.
@@ -345,7 +337,7 @@ class gazeTracker:
         return data
 
     def estimate_head_pose(self, landmarks, frame):
-        """Estimate pitch/yaw/roll from a sparse set of facial landmarks."""
+        # Estimate pitch/yaw/roll from a sparse set of facial landmarks
         h, w = frame.shape[:2]
 
         # Six facial landmark indices chosen to span the face robustly:
@@ -414,7 +406,7 @@ class gazeTracker:
         return pitch, yaw, roll, rotation_vector, translation_vector, camera_matrix, dist_coeffs
 
     def draw_head_pose(self, frame, landmarks):
-        """Draw 3D axes to visualize head orientation for debugging."""
+        # Draw 3D axes to visualize head orientation for debugging
         pitch, yaw, roll, rotation_vector, translation_vector, camera_matrix, dist_coeffs = self.estimate_head_pose(
             landmarks, frame
         )

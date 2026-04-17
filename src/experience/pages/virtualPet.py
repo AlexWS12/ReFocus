@@ -1,16 +1,63 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea, QApplication,
-    QInputDialog, QMessageBox,
+    QDialog, QPushButton, QInputDialog, QMessageBox,
 )
 from PySide6.QtCore import Qt
 
 from src.experience.widgets.centered_label import CenteredLabel
-from src.experience.widgets.pet_view import PetView
+from src.experience.widgets.pet_view import CompactPetView
 from src.experience.widgets.pet_card import PetCard
 from src.experience.widgets.accessory_card import AccessoryCard
 from src.experience.pet_catalog import PET_CATALOG
 from src.experience.accessory_catalog import ACCESSORY_CATALOG
 from src.intelligence.pet_manager import PetManager
+
+
+class PurchaseConfirmDialog(QDialog):
+    def __init__(self, pet_name: str, cost: int, current_coins: int, parent=None):
+        super().__init__(parent)
+        self.setObjectName("confirmDialog")
+        self.setWindowTitle("Confirm Purchase")
+        self.setModal(True)
+        self.setMinimumWidth(360)
+
+        remaining = current_coins - cost
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(10)
+
+        title = QLabel("Buy this pet?")
+        title.setObjectName("confirmDialogTitle")
+        layout.addWidget(title)
+
+        body = QLabel(f"Spend {cost} coins to unlock {pet_name}.")
+        body.setObjectName("confirmDialogBody")
+        body.setWordWrap(True)
+        layout.addWidget(body)
+
+        meta = QLabel(f"Balance after purchase: {remaining} coins")
+        meta.setObjectName("confirmDialogMeta")
+        layout.addWidget(meta)
+
+        button_row = QHBoxLayout()
+        button_row.addStretch(1)
+
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setObjectName("confirmSecondaryButton")
+        cancel_btn.clicked.connect(self.reject)
+        button_row.addWidget(cancel_btn)
+
+        buy_btn = QPushButton("Buy Pet")
+        buy_btn.setObjectName("confirmPrimaryButton")
+        buy_btn.clicked.connect(self.accept)
+        button_row.addWidget(buy_btn)
+
+        layout.addLayout(button_row)
+
+        # Use cancel as safe default to reduce accidental purchases.
+        cancel_btn.setDefault(True)
+        cancel_btn.setAutoDefault(True)
 
 
 class VirtualPet(QWidget):
@@ -31,7 +78,7 @@ class VirtualPet(QWidget):
         root.addWidget(title)
 
         # ── Live preview ─────────────────────────────────────
-        self.pet_view = PetView(self, size=140)
+        self.pet_view = CompactPetView(self)
         root.addWidget(self.pet_view, alignment=Qt.AlignCenter)
 
         self.pet_name_label = CenteredLabel()
@@ -251,14 +298,29 @@ class VirtualPet(QWidget):
             return
 
         default_name = PET_CATALOG[pet_id]["name"]
-        name, ok = QInputDialog.getText(self, "Name Your Pet", f"Enter a name for your {default_name}:", text=default_name)
-        if not ok or not name.strip():
+        if not self._confirm_purchase(default_name, cost):
+            self._show_toast("Purchase cancelled.", "#8892a4")
             return
 
-        if self.mgr.purchase_pet(pet_id, name.strip()):
+        name, ok = QInputDialog.getText(
+            self,
+            "Name Your Pet",
+            f"Enter a name for your {default_name}:",
+            text=default_name,
+        )
+        if not ok:
+            self._show_toast("Purchase cancelled.", "#8892a4")
+            return
+
+        cleaned_name = name.strip()
+        if not cleaned_name:
+            self._show_toast("Name can't be empty.", "#e74c3c")
+            return
+
+        if self.mgr.purchase_pet(pet_id, cleaned_name):
             self.mgr.set_active_pet(pet_id)
             self._emit_change()
-            self._show_toast(f"Purchased and equipped {name.strip()}!", "#27ae60")
+            self._show_toast(f"Purchased and equipped {cleaned_name}!", "#27ae60")
         else:
             self._show_toast("Purchase failed!", "#e74c3c")
 
@@ -304,3 +366,7 @@ class VirtualPet(QWidget):
         self.toast_label.setStyleSheet(
             f"color: {color}; font-size: 12px; min-height: 20px;"
         )
+
+    def _confirm_purchase(self, pet_name: str, cost: int) -> bool:
+        dialog = PurchaseConfirmDialog(pet_name, cost, self.mgr.get_coins(), self)
+        return dialog.exec() == QDialog.DialogCode.Accepted

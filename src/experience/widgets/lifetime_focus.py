@@ -2,6 +2,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QVBoxLayout
 
 from src.experience.widgets.centered_label import CenteredLabel
+from src.experience.widgets.duration_format import format_focus_duration
 
 
 class LifetimeFocus(QFrame):
@@ -19,4 +20,4 @@ class LifetimeFocus(QFrame):
 
     def refresh(self, data):
         seconds = data.get("session_analytics", {}).get("lifetime_focus_seconds", 0) or 0
-        self._value_label.setText(f"{seconds:.2f} seconds")
+        self._value_label.setText(format_focus_duration(seconds))
