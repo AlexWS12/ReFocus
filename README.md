@@ -1,5 +1,4 @@
 # Study Tracker Partner - Team Structure
-<img width="6912" height="3456" alt="image" src="https://github.com/user-attachments/assets/4d01d969-0f6a-48a1-af36-eba1ceb10a8a" />
 
 ## How We Collaborate
 
