@@ -33,3 +33,5 @@ src/
 
 - **Goal:** Desktop study companion that tracks focus via webcam, detects distractions, and rewards focused time with points, levels, achievements, and an animated pet.
 - **Flow:** VISION detects focus/distractions → EXPERIENCE reacts in real time → session stored and analyzed by INTELLIGENCE → EXPERIENCE surfaces stats and insights in the UI.
+
+Try with: uv run main.py
